@@ -222,12 +222,11 @@ def createReport(filename):
     # Map Portal Invoices to SLIC Invoices
     #
 
-    invoicedf = df
-    invoicedf['Invoice_Amount'] = invoicedf['totalOneTimeAmount'] + invoicedf['totalRecurringCharge']
-    SLICInvoice = pd.pivot_table(invoicedf,
+    df["totalAmount"] = df["totalOneTimeAmount"] + df["totalRecurringCharge"]
+    SLICInvoice = pd.pivot_table(df,
                                  index=["IBM_Invoice_Month", "Portal_Invoice_Date", "Portal_Invoice_Number", "Type"],
-                                 values=["Invoice_Amount"],
-                                 aggfunc={'Invoice_Amount': np.sum}, fill_value=0)
+                                 values=["totalAmount"],
+                                 aggfunc={'totalAmount': np.sum}, fill_value=0)
     out = pd.concat([d.append(d.sum().rename((k, '-', '-', 'Total'))) for k, d in SLICInvoice.groupby('IBM_Invoice_Month')])
 
     out.to_excel(writer, 'InvoiceMap')
@@ -241,9 +240,9 @@ def createReport(filename):
     # Build a pivot table by Invoice Type
     #
     invoiceSummary = pd.pivot_table(df, index=["Type", "Category"],
-                            values=["totalOneTimeAmount", "totalRecurringCharge"],
+                            values=["totalAmount"],
                             columns=['IBM_Invoice_Month'],
-                            aggfunc={'totalOneTimeAmount': np.sum, 'totalRecurringCharge': np.sum}, fill_value=0).\
+                            aggfunc={'totalAmount': np.sum,}, margins=True, margins_name="Total", fill_value=0).\
                                     rename(columns={'totalRecurringCharge': 'TotalRecurring'})
     invoiceSummary.to_excel(writer, 'InvoiceSummary')
     worksheet = writer.sheets['InvoiceSummary']
@@ -256,7 +255,6 @@ def createReport(filename):
 
     #
     # Build a pivot table by Category with totalRecurringCharges
-    df["totalAmount"] = df["totalOneTimeAmount"] + df["totalRecurringCharge"]
 
     categorySummary = pd.pivot_table(df, index=["Category", "Description"],
                             values=["totalAmount"],
