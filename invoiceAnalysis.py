@@ -368,10 +368,10 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--startdate", default=os.environ.get('startdate', None),help="Start Year & Month in format YYYY/MM")
     parser.add_argument("-e", "--enddate", default=os.environ.get('enddate', None),help="End Year & Month in format YYYY/MM")
     parser.add_argument("--output", default=os.environ.get('output', 'invoice-analysis.xlsx'), help="Filename Excel output file. (including extension of .xlsx)")
-    parser.add_argument("--COS_ENDPOINT", default=os.environ.get('COS_ENDPOINT'), help="COS endpoint to use for Object Storage.")
-    parser.add_argument("--COS_APIKEY", default=os.environ.get('COS_APIKEY'), help="COS apikey to use for Object Storage.")
-    parser.add_argument("--COS_INSTANCE_CRN", default=os.environ.get('COS_INSTANCE_CRN'), help="COS Instance CRN to use for file upload.")
-    parser.add_argument("--COS_BUCKET", default=os.environ.get('COS_BUCKET'), help="COS Bucket name to use for file upload.")
+    parser.add_argument("--COS_ENDPOINT", default=os.environ.get('COS_ENDPOINT', None), help="COS endpoint to use for Object Storage.")
+    parser.add_argument("--COS_APIKEY", default=os.environ.get('COS_APIKEY', None), help="COS apikey to use for Object Storage.")
+    parser.add_argument("--COS_INSTANCE_CRN", default=os.environ.get('COS_INSTANCE_CRN', None), help="COS Instance CRN to use for file upload.")
+    parser.add_argument("--COS_BUCKET", default=os.environ.get('COS_BUCKET', None), help="COS Bucket name to use for file upload.")
 
     args = parser.parse_args()
 
@@ -428,14 +428,15 @@ if __name__ == "__main__":
     createReport(args.output)
 
     # upload created file to COS
-    cos = ibm_boto3.resource("s3",
-                             ibm_api_key_id=args.COS_APIKEY,
-                             ibm_service_instance_id=args.COS_INSTANCE_CRN,
-                             config=Config(signature_version="oauth"),
-                             endpoint_url=args.COS_ENDPOINT
-                             )
-    multi_part_upload(args.COS_BUCKET, args.output, "./" + args.output)
+    if args.COS_APIKEY != None:
+        cos = ibm_boto3.resource("s3",
+                                 ibm_api_key_id=args.COS_APIKEY,
+                                 ibm_service_instance_id=args.COS_INSTANCE_CRN,
+                                 config=Config(signature_version="oauth"),
+                                 endpoint_url=args.COS_ENDPOINT
+                                 )
+        multi_part_upload(args.COS_BUCKET, args.output, "./" + args.output)
 
-    #cleanup file
-    logging.info("Deleting {} local file.".format(args.output))
-    os.remove("./"+args.output)
+        #cleanup file
+        logging.info("Deleting {} local file.".format(args.output))
+        os.remove("./"+args.output)
