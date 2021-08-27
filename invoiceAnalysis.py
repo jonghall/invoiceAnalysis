@@ -68,7 +68,7 @@ def getInvoices(startdate, enddate):
     #
     # GET LIST OF INVOICES BETWEEN DATES
     #
-    logging.info("Looking up invoices....")
+    logging.info("Looking up invoices from {} to {}....".format(startdate, enddate))
 
     # Build Filter for Invoices
     try:
@@ -219,21 +219,6 @@ def createReport(filename):
     worksheet.set_column('P:S', 18, usdollar)
 
     #
-    # Build a pivot table by Invoice Type
-    #
-    invoiceSummary = pd.pivot_table(df, index=["Type", "Category"],
-                            values=["totalOneTimeAmount", "totalRecurringCharge"],
-                            columns=['IBM_Invoice_Month'],
-                            aggfunc={'totalOneTimeAmount': np.sum, 'totalRecurringCharge': np.sum}, fill_value=0).\
-                                    rename(columns={'totalRecurringCharge': 'TotalRecurring'})
-    invoiceSummary.to_excel(writer, 'InvoiceSummary')
-    worksheet = writer.sheets['InvoiceSummary']
-    format1 = workbook.add_format({'num_format': '$#,##0.00'})
-    format2 = workbook.add_format({'align': 'left'})
-    worksheet.set_column("A:A", 20, format2)
-    worksheet.set_column("B:B", 40, format2)
-    worksheet.set_column("C:ZZ", 18, format1)
-    #
     # Map Portal Invoices to SLIC Invoices
     #
 
@@ -252,15 +237,31 @@ def createReport(filename):
     worksheet.set_column("A:D", 20, format2)
     worksheet.set_column("E:ZZ", 18, format1)
 
+    #
+    # Build a pivot table by Invoice Type
+    #
+    invoiceSummary = pd.pivot_table(df, index=["Type", "Category"],
+                            values=["totalOneTimeAmount", "totalRecurringCharge"],
+                            columns=['IBM_Invoice_Month'],
+                            aggfunc={'totalOneTimeAmount': np.sum, 'totalRecurringCharge': np.sum}, fill_value=0).\
+                                    rename(columns={'totalRecurringCharge': 'TotalRecurring'})
+    invoiceSummary.to_excel(writer, 'InvoiceSummary')
+    worksheet = writer.sheets['InvoiceSummary']
+    format1 = workbook.add_format({'num_format': '$#,##0.00'})
+    format2 = workbook.add_format({'align': 'left'})
+    worksheet.set_column("A:A", 20, format2)
+    worksheet.set_column("B:B", 40, format2)
+    worksheet.set_column("C:ZZ", 18, format1)
+
 
     #
     # Build a pivot table by Category with totalRecurringCharges
-    #
+    df["totalAmount"] = df["totalOneTimeAmount"] + df["totalRecurringCharge"]
+
     categorySummary = pd.pivot_table(df, index=["Category", "Description"],
-                            values=["totalRecurringCharge"],
+                            values=["totalAmount"],
                             columns=['IBM_Invoice_Month'],
-                            aggfunc={'totalRecurringCharge': np.sum}, fill_value=0).\
-                                    rename(columns={'totalRecurringCharge': 'TotalRecurring'})
+                            aggfunc={'totalAmount': np.sum}, margins=True, margins_name="Total", fill_value=0)
     categorySummary.to_excel(writer, 'CategorySummary')
     worksheet = writer.sheets['CategorySummary']
     format1 = workbook.add_format({'num_format': '$#,##0.00'})
@@ -321,6 +322,10 @@ def createReport(filename):
                                         rename(columns={"Description": 'qty', 'totalRecurringCharge': 'TotalRecurring'})
         monthlyBareMetalServerPivot.to_excel(writer, 'MthlyBaremetalServerPivot')
         worksheet = writer.sheets['MthlyBaremetalServerPivot']
+        format1 = workbook.add_format({'num_format': '$#,##0.00'})
+        format2 = workbook.add_format({'align': 'left'})
+        worksheet.set_column("A:A", 40, format2)
+        worksheet.set_column("B:B", 40, format2)
 
     writer.save()
 
@@ -360,8 +365,8 @@ if __name__ == "__main__":
                     " between Start and End date.")
     parser.add_argument("-u", "--username", default=os.environ.get('SL_USER', None), help="IBM Cloud Classic API Key Username")
     parser.add_argument("-k", "--apikey", default=os.environ.get('SL_API_KEY', None), help="IBM Cloud Classic API Key")
-    parser.add_argument("-s", "--startdate", default=os.environ.get('startdate', None), help="Start date mm/dd/yy")
-    parser.add_argument("-e", "--enddate", default=os.environ.get('enddate', None), help="End date mm/dd/yyyy")
+    parser.add_argument("-s", "--startdate", default=os.environ.get('startdate', None),help="Start Year & Month in format YYYY/MM")
+    parser.add_argument("-e", "--enddate", default=os.environ.get('enddate', None),help="End Year & Month in format YYYY/MM")
     parser.add_argument("--output", default=os.environ.get('output', 'invoice-analysis.xlsx'), help="Filename Excel output file. (including extension of .xlsx)")
     parser.add_argument("--COS_ENDPOINT", default=os.environ.get('COS_ENDPOINT'), help="COS endpoint to use for Object Storage.")
     parser.add_argument("--COS_APIKEY", default=os.environ.get('COS_APIKEY'), help="COS apikey to use for Object Storage.")
@@ -371,22 +376,31 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.username == None or args.apikey == None:
-        logging.warning("IBM Cloud Classic Username & apiKey not specified or set via environment variables, using default API keys.")
+        logging.warning("IBM Cloud Classic Username & apiKey not specified and not set via environment variables, using default API keys.")
         client = SoftLayer.Client()
     else:
         client = SoftLayer.Client(username=args.username, api_key=args.apikey)
 
     if args.startdate == None:
-        logging.error("You must provide a start date in the format of MM/DD/YYYY.")
+        logging.error("You must provide a start month and year date in the format of YYYY/MM.")
         quit()
     else:
-        startdate = args.startdate
+        month = int(args.startdate[5:7]) - 1
+        year = int(args.startdate[0:4])
+        if month == 0:
+            year = year - 1
+            month = 12
+        day = 20
+        startdate = datetime(year, month, day).strftime('%m/%d/%Y')
 
     if args.enddate == None:
         logging.error("You must provide an end date in the format of MM/DD/YYYY.")
         quit()
     else:
-        enddate = args.enddate
+        month = int(args.enddate[5:7])
+        year = int(args.enddate[0:4])
+        day = 19
+        enddate = datetime(year, month, day).strftime('%m/%d/%Y')
 
     # Create dataframe to work with
 
