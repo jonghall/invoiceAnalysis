@@ -23,6 +23,8 @@ from datetime import datetime, timedelta
 import pandas as pd
 import numpy as np
 from logdna import LogDNAHandler
+import ibm_boto3
+from ibm_botocore.client import Config, ClientError
 
 def setup_logging(default_path='logging.json', default_level=logging.info, env_key='LOG_CFG'):
 
@@ -69,17 +71,21 @@ def getInvoices(startdate, enddate):
     logging.info("Looking up invoices from {} to {}....".format(startdate, enddate))
 
     # Build Filter for Invoices
-    invoiceList = client['Account'].getInvoices(mask='id,createDate,typeCode,invoiceTotalAmount,invoiceTotalRecurringAmount,invoiceTopLevelItemCount', filter={
-            'invoices': {
-                'createDate': {
-                    'operation': 'betweenDate',
-                    'options': [
-                         {'name': 'startDate', 'value': [startdate+" 0:0:0"]},
-                         {'name': 'endDate', 'value': [enddate+" 23:59:59"]}
-                    ]
+    try:
+        invoiceList = client['Account'].getInvoices(mask='id,createDate,typeCode,invoiceTotalAmount,invoiceTotalRecurringAmount,invoiceTopLevelItemCount', filter={
+                'invoices': {
+                    'createDate': {
+                        'operation': 'betweenDate',
+                        'options': [
+                             {'name': 'startDate', 'value': [startdate+" 0:0:0"]},
+                             {'name': 'endDate', 'value': [enddate+" 23:59:59"]}
+                        ]
+                    }
                 }
-            }
-    })
+        })
+    except SoftLayer.SoftLayerAPIError as e:
+        logging.error("Account::getInvoices: %s, %s" % (e.faultCode, e.faultString))
+        quit()
     return invoiceList
 
 def getInvoiceDetail(invoiceList):
@@ -111,8 +117,13 @@ def getInvoiceDetail(invoiceList):
                 remaining = totalItems - offset
             logging.info("Retrieving %s invoice line items for Invoice %s at Offset %s of %s" % (limit, invoiceID, offset, totalItems))
 
-            Billing_Invoice = client['Billing_Invoice'].getInvoiceTopLevelItems(id=invoiceID, limit=limit, offset=offset,
+            try:
+                Billing_Invoice = client['Billing_Invoice'].getInvoiceTopLevelItems(id=invoiceID, limit=limit, offset=offset,
                                     mask='id, billingItemId, categoryCode, category.name, hourlyFlag, hostName, domainName, product.description, createDate, totalRecurringAmount, totalOneTimeAmount, usageChargeFlag, hourlyRecurringFee, children.description, children.categoryCode, children.product, children.hourlyRecurringFee')
+            except SoftLayer.SoftLayerAPIError as e:
+                logging.error("Billing_Invoice::getInvoiceTopLevelItems: %s, %s" % (e.faultCode, e.faultString))
+                quit()
+
             count = 0
             # ITERATE THROUGH DETAIL
             for item in Billing_Invoice:
@@ -191,11 +202,11 @@ def getInvoiceDetail(invoiceList):
 
                 df = df.append(row, ignore_index=True)
 
-def createReport():
+def createReport(filename):
     # Write dataframe to excel
     global df
     logging.info("Creating Pivots File.")
-    writer = pd.ExcelWriter(args.output, engine='xlsxwriter')
+    writer = pd.ExcelWriter(filename, engine='xlsxwriter')
     workbook = writer.book
 
     #
@@ -318,17 +329,49 @@ def createReport():
 
     writer.save()
 
+def multi_part_upload(bucket_name, item_name, file_path):
+    try:
+        logging.info("Starting file transfer for {0} to bucket: {1}".format(item_name, bucket_name))
+        # set 5 MB chunks
+        part_size = 1024 * 1024 * 5
+
+        # set threadhold to 15 MB
+        file_threshold = 1024 * 1024 * 15
+
+        # set the transfer threshold and chunk size
+        transfer_config = ibm_boto3.s3.transfer.TransferConfig(
+            multipart_threshold=file_threshold,
+            multipart_chunksize=part_size
+        )
+
+        # the upload_fileobj method will automatically execute a multi-part upload
+        # in 5 MB chunks for all files over 15 MB
+        with open(file_path, "rb") as file_data:
+            cos.Object(bucket_name, item_name).upload_fileobj(
+                Fileobj=file_data,
+                Config=transfer_config
+            )
+        logging.info("Transfer for {0} complete".format(item_name))
+    except ClientError as be:
+        logging.error("CLIENT ERROR: {0}".format(be))
+    except Exception as e:
+        logging.error("Unable to complete multi-part upload: {0}".format(e))
+
+
 if __name__ == "__main__":
     setup_logging()
     parser = argparse.ArgumentParser(
         description="Export detail from invoices between dates sorted by Hourly vs Monthly "
                     " between Start and End date.")
-    parser.add_argument("-u", "--username", default=os.environ.get('SL_USER', None),
-                        help="IBM Cloud Classic API Key Username")
+    parser.add_argument("-u", "--username", default=os.environ.get('SL_USER', None), help="IBM Cloud Classic API Key Username")
     parser.add_argument("-k", "--apikey", default=os.environ.get('SL_API_KEY', None), help="IBM Cloud Classic API Key")
-    parser.add_argument("-s", "--startdate", default=os.environ.get('startdate', None), help="Start Year & Month in format YYYY/MM")
-    parser.add_argument("-e", "--enddate", default=os.environ.get('enddate', None), help="End Year & Month in format YYYY/MM")
-    parser.add_argument("-o", "--output", default=os.environ.get('output', "invoices-detail.xlsx"), help="Filename .xlsx for output.")
+    parser.add_argument("-s", "--startdate", default=os.environ.get('startdate', None),help="Start Year & Month in format YYYY/MM")
+    parser.add_argument("-e", "--enddate", default=os.environ.get('enddate', None),help="End Year & Month in format YYYY/MM")
+    parser.add_argument("--output", default=os.environ.get('output', 'invoice-analysis.xlsx'), help="Filename Excel output file. (including extension of .xlsx)")
+    parser.add_argument("--COS_ENDPOINT", default=os.environ.get('COS_ENDPOINT', None), help="COS endpoint to use for Object Storage.")
+    parser.add_argument("--COS_APIKEY", default=os.environ.get('COS_APIKEY', None), help="COS apikey to use for Object Storage.")
+    parser.add_argument("--COS_INSTANCE_CRN", default=os.environ.get('COS_INSTANCE_CRN', None), help="COS Instance CRN to use for file upload.")
+    parser.add_argument("--COS_BUCKET", default=os.environ.get('COS_BUCKET', None), help="COS Bucket name to use for file upload.")
 
     args = parser.parse_args()
 
@@ -382,4 +425,18 @@ if __name__ == "__main__":
 
     invoiceList = getInvoices(startdate, enddate)
     getInvoiceDetail(invoiceList)
-    createReport()
+    createReport(args.output)
+
+    # upload created file to COS
+    if args.COS_APIKEY != None:
+        cos = ibm_boto3.resource("s3",
+                                 ibm_api_key_id=args.COS_APIKEY,
+                                 ibm_service_instance_id=args.COS_INSTANCE_CRN,
+                                 config=Config(signature_version="oauth"),
+                                 endpoint_url=args.COS_ENDPOINT
+                                 )
+        multi_part_upload(args.COS_BUCKET, args.output, "./" + args.output)
+
+        #cleanup file
+        logging.info("Deleting {} local file.".format(args.output))
+        os.remove("./"+args.output)
