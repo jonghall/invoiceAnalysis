@@ -53,8 +53,8 @@ Excel worksheet for review.  Each tab has a breakdown based on:
     2. Click add, choose reference to full configmap, and choose configmap created in previous step and click add.
     3. Click add, choose reference to full secret, and choose secrets created in previous step and click add.
     4. Click add, choose literal value (click add after each, and repeat)
-        -  ***startdate*** = start date of invoice analysis in MM/DD/YYYY format
-        -  ***enddate*** = end date of invoice analysis in MM/DD/YYYY format
+        -  ***startdate*** = start year & month of invoice analysis in YYYY/MM format
+        -  ***enddate*** = end year & month invoice analysis in YYYY/MM format
         -  ***output*** = report filename (including extension of XLSX to be written to COS bucket)
 4. to Run report click ***Submit job***
 5, Logging for job can be found from job screen, by clicking Actions, Logging
