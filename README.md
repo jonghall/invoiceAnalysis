@@ -25,10 +25,14 @@ Instructions:
 ````
 pip install -r requirements.txt
 ````
-2.  Set environment variables.
+2.  Set environment variables. COS apikey is only required if you wish file to be written to COS, otherwise file will be written locally.
 ```bazaar
 export SL_API_USERNAME=IBMxxxxx
 export SL_API_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxx
+export COS_APIKEY= xxxxxxxxxxxxxxxxxxxxx
+export COS_BUCKET = Bucket within COS instance to write report file to.
+export COS_ENDPOINT = Public COS Endpoint for bucket to write report file to
+export COS_INSTANCE_CRN = COS Service Instance CRN in which bucket is located.
 ```
 
 3.  Run Python script.
