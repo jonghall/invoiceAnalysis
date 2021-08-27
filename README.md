@@ -1,10 +1,11 @@
-**IBM Cloud Classic Infrastructure Billing API Scripts**
+# IBM Cloud Classic Infrastructure Billing API Scripts in Code Engine
 
 Script | Description
 ------ | -----------
 invoiceAnalysis.py | Analyzes all invoices between two dates and creates excel reports.
 requirements.txt | Package requirements
 logging.json | LOGGER config used by script
+Dockerfile | Docker Build file used by code engine to build container.
 
 *invoiceAnalysis.py* analyzes IBM Cloud Classic Infrastructure invoices between two dates and consolidates billing data into an
 Excel worksheet for review.  Each tab has a breakdown based on:
@@ -19,40 +20,41 @@ Excel worksheet for review.  Each tab has a breakdown based on:
         - ***HrlyBareMetalServerPivot*** tab is a pivot of Hourly Bare Metal Servers
         - ***MnthlyBareMetalServerPivot*** tab is a pivot table of monthly Bare Metal Server
 
-Instructions:
+### Setting up IBM Code Engine and building container to run report
+1. Create project, build job and job.
+    1. Open the Code Engine console
+    2. Select Start creating from Start from source code.
+    3. Select Job
+    4. Enter a name for the job such as invoiceanalysis. Use a name for your job that is unique within the project.
+    5. Select a project from the list of available projects of if this is the first one, create a new one. Note that you must have a selected project to deploy an app.
+    6. Enter the URL for this GitHub repository and click specify build details. Make adjustments if needed to URL and Branch name. Click Next.
+    7. Select Dockerfile for Strategy, Dockerfile for Dockerfile, 10m for Timeout, and Medium for Build resources. Click Next.
+    8.  Select a container registry location, such as IBM Registry, Dallas.
+    9.  Select Automatic for Registry access.
+    10. Select an existing namespace or enter a name for a new one, for example, newnamespace.
+    11. Enter a name for your image and optionally a tag.
+    12. Click Done.
+    13. Click Create.
+2. Create configmaps and secrets.
+    1. From project list, choose newly created project.
+    2. Select secrets and configmaps
+    3. click create, choose config map, and give it a name. Add the following key value pairs
+        - ***COS_BUCKET*** = Bucket within COS instance to write report file to.
+        - ***COS_ENDPOINT*** = Public COS Endpoint for bucket to write report file to
+        - ***COS_INSTANCE_CRN*** = COS Service Instance CRN in which bucket is located.
+    4. Select secrets and configmaps (again)
+    6 click create, choose secrets, and give it a name. Add the following key value pairs
+        - ***COS_APIKEY*** = your COS Api Key Id with writter access to appropriate bucket
+        - ***SL_API_KEY*** = your IBM Cloud Classic Infrastructure API Key
+        - ***SL_USER*** = your IBM Cloud Classic Infrastructure User Id
 
-1. Install required packages.  
-````
-pip install -r requirements.txt
-````
-2.  Set environment variables.
-```bazaar
-export SL_API_USERNAME=IBMxxxxx
-export SL_API_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxx
-```
-
-3.  Run Python script.
-```bazaar
-python invoiceAnalysis.py -s 2021/01 -e 2021/06 --output analysis_JanToMay.XLSX
-```
-
-```bazaar
-usage: invoiceAnalysis.py [-h] [-u USERNAME] [-k APIKEY] [-s STARTDATE] [-e ENDDATE] [-o OUTPUT]
-
-Export detail from invoices between dates sorted by Hourly vs Monthly between Start and End date.
-
-optional arguments:
-  -h, --help            show this help message and exit
-  -u USERNAME, --username USERNAME
-                        IBM Cloud Classic API Key Username
-  -k APIKEY, --apikey APIKEY
-                        IBM Cloud Classic API Key
-  -s STARTDATE, --startdate STARTDATE
-                        Start Year & Month in format YYYY/MM
-  -e ENDDATE, --enddate ENDDATE
-                        End Year & Month in format YYYY/MM
-  -o OUTPUT, --output OUTPUT
-                        Filename .xlsx for output.
-
-
-```
+3. Choose the job previously created.
+    1. Click on the Environment variables tab.
+    2. Click add, choose reference to full configmap, and choose configmap created in previous step and click add.
+    3. Click add, choose reference to full secret, and choose secrets created in previous step and click add.
+    4. Click add, choose literal value (click add after each, and repeat)
+        -  ***startdate*** = start date of invoice analysis in MM/DD/YYYY format
+        -  ***enddate*** = end date of invoice analysis in MM/DD/YYYY format
+        -  ***output*** = report filename (including extension of XLSX to be written to COS bucket)
+4. to Run report click ***Submit job***
+5, Logging for job can be found from job screen, by clicking Actions, Logging
