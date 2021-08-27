@@ -37,7 +37,7 @@ python invoiceAnalysis.py -s 2021/01 -e 2021/06 --output analysis_JanToMay.XLSX
 ```
 
 ```bazaar
-usage: invoiceAnalysis.py [-h] [-u USERNAME] [-k APIKEY] [-s STARTDATE] [-e ENDDATE] [-o OUTPUT]
+usage: invoiceAnalysis.py [-h] [-u USERNAME] [-k APIKEY] [-s STARTDATE] [-e ENDDATE] [--output OUTPUT] [--COS_ENDPOINT COS_ENDPOINT] [--COS_APIKEY COS_APIKEY] [--COS_INSTANCE_CRN COS_INSTANCE_CRN] [--COS_BUCKET COS_BUCKET]
 
 Export detail from invoices between dates sorted by Hourly vs Monthly between Start and End date.
 
@@ -51,8 +51,16 @@ optional arguments:
                         Start Year & Month in format YYYY/MM
   -e ENDDATE, --enddate ENDDATE
                         End Year & Month in format YYYY/MM
-  -o OUTPUT, --output OUTPUT
-                        Filename .xlsx for output.
+  --output OUTPUT       Filename Excel output file. (including extension of .xlsx)
+  --COS_ENDPOINT COS_ENDPOINT
+                        COS endpoint to use for Object Storage.
+  --COS_APIKEY COS_APIKEY
+                        COS apikey to use for Object Storage.
+  --COS_INSTANCE_CRN COS_INSTANCE_CRN
+                        COS Instance CRN to use for file upload.
+  --COS_BUCKET COS_BUCKET
+                        COS Bucket name to use for file upload.
+
 
 
 ```
