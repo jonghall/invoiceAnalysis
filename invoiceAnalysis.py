@@ -353,8 +353,8 @@ def createReport(filename, paas):
                                      columns=['usageMonth'],
                                      aggfunc={'charges': np.sum, }, margins=True, margins_name="Total",
                                      fill_value=0)
-        paasSummaryPlan.to_excel(writer, 'PaaS_Summary_Plan')
-        worksheet = writer.sheets['PaaS_Summary_Plan']
+        paasSummaryPlan.to_excel(writer, 'PaaS_Plan_Summary')
+        worksheet = writer.sheets['PaaS_Plan_Summary']
         format1 = workbook.add_format({'num_format': '$#,##0.00'})
         format2 = workbook.add_format({'align': 'left'})
         worksheet.set_column("A:B", 25, format2)
