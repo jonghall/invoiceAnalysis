@@ -18,8 +18,9 @@
 #   Return toplevel items and export to excel spreadsheet
 __author__ = 'jonhall'
 
-import SoftLayer, argparse, os, logging, logging.config, json
-from datetime import datetime, timedelta
+import SoftLayer, argparse, os, logging, logging.config, json, requests, urllib
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
 import pandas as pd
 import numpy as np
 from logdna import LogDNAHandler
@@ -202,9 +203,9 @@ def getInvoiceDetail(invoiceList):
 
                 df = df.append(row, ignore_index=True)
 
-def createReport(filename):
+def createReport(filename, paas):
     # Write dataframe to excel
-    global df
+    global df, paasUsage
     logging.info("Creating Pivots File.")
     writer = pd.ExcelWriter(filename, engine='xlsxwriter')
     workbook = writer.book
@@ -325,6 +326,22 @@ def createReport(filename):
         worksheet.set_column("A:A", 40, format2)
         worksheet.set_column("B:B", 40, format2)
 
+    # IF PaaS credential included add usage reports
+    if paas:
+        paasUsage.to_excel(writer, 'PaaS_Usage')
+        worksheet = writer.sheets['PaaS_Usage']
+
+        paasSummary = pd.pivot_table(paasUsage, index=["resource_name", "plan_name"],
+                                        values=["charges"],
+                                        columns=['usageMonth'],
+                                        aggfunc={'charges': np.sum, }, margins=True, margins_name="Total",
+                                        fill_value=0)
+        paasSummary.to_excel(writer, 'PaaS_Summary')
+        worksheet = writer.sheets['PaaS_Summary']
+        format1 = workbook.add_format({'num_format': '$#,##0.00'})
+        format2 = workbook.add_format({'align': 'left'})
+        worksheet.set_column("A:A", 20, format2)
+        worksheet.set_column("B:ZZ", 18, format1)
     writer.save()
 
 def multi_part_upload(bucket_name, item_name, file_path):
@@ -355,6 +372,118 @@ def multi_part_upload(bucket_name, item_name, file_path):
     except Exception as e:
         logging.error("Unable to complete multi-part upload: {0}".format(e))
 
+def getiamtoken(apiKey,iam_endpoint):
+    ################################################
+    ## Get Bearer Token using apiKey
+    ################################################
+
+    headers = {"Content-Type": "application/x-www-form-urlencoded",
+               "Accept": "application/json"}
+
+    parms = {"grant_type": "urn:ibm:params:oauth:grant-type:apikey", "apikey": apiKey}
+
+    try:
+        resp = requests.post(iam_endpoint + "/identity/token?" + urllib.parse.urlencode(parms),
+                             headers=headers, timeout=30)
+        resp.raise_for_status()
+    except requests.exceptions.ConnectionError as errc:
+        logging.error("Error Connecting: {}".format(errc))
+        quit()
+    except requests.exceptions.Timeout as errt:
+        logging.error("Timeout Error: {}".format(errt))
+        quit()
+    except requests.exceptions.HTTPError as errb:
+        logging.error("Invalid token request {} {}.".format(errb, resp.text))
+        quit()
+
+    iam = resp.json()
+
+    iamtoken = {"Authorization": "Bearer " + iam["access_token"]}
+
+    return iamtoken
+
+def getusage(accountId, iamToken, BILLING_ENDPOINT, month):
+    # Get a list of current resource groups in accountId
+
+    try:
+        resp = requests.get(BILLING_ENDPOINT + '/v4/accounts/' + accountId + '/usage/' + month + "?_names=True",  headers=iamToken, timeout=30)
+        resp.raise_for_status()
+    except requests.exceptions.ConnectionError as errc:
+        logging.error("Error Connecting to billing endpoint: {}.".format(errc))
+        quit()
+    except requests.exceptions.Timeout as errt:
+        logging.error("Timeout Error: {}".format(errt))
+        quit()
+    except requests.exceptions.HTTPError as errb:
+        if resp.status_code == 400:
+            logging.error("Invalid get billing usage request {}.".format(errb))
+            quit()
+        elif resp.status_code == 401:
+            logging.error("Your access token is invalid or authentication of your token failed.")
+            quit()
+        elif resp.status_code == 403:
+            logging.error("Your access token is valid but does not have the necessary permissions to access this resource.")
+            quit()
+
+    if resp.status_code == 200:
+        accountUsage = json.loads(resp.content)
+    else:
+        logging.error("Unexpected Error getting account usage, error code = {}.".format(resp.status_code))
+        quit()
+    return accountUsage
+
+def accountUsage(IC_ACCOUNT, IC_API_KEY, IAM_ENDPOINT, BILLING_ENDPOINT, startdate, enddate):
+    ##########################################################
+    ## Get Usage for Account matching recuring invoice periods
+    ##########################################################
+
+    # Get IBM Cloud IAM token
+    iamToken = getiamtoken(IC_API_KEY, IAM_ENDPOINT)
+
+    accountUsage = pd.DataFrame(columns=['usageMonth',
+                               'recurringMonth',
+                               'resource_name',
+                               'resource_id',
+                               'plan_name',
+                               'plan_id',
+                               'billable_cost',
+                               'non_billable_cost',
+                               'unit',
+                               'quantity',
+                               'charges']
+                                )
+
+    # PaaS consumption is delayed by one recurring invoice (ie April usage on June 1 recurring invoice)
+    paasStart = datetime.strptime(startdate, '%m/%d/%Y') - relativedelta(months=1)
+    paasEnd = datetime.strptime(enddate, '%m/%d/%Y') - relativedelta(months=2)
+
+    while paasStart <= paasEnd + relativedelta(days=1):
+        usageMonth = paasStart.strftime('%Y-%m')
+        recurringMonth = paasStart + relativedelta(months=2)
+        recurringMonth = recurringMonth.strftime('%Y-%m')
+        logging.info("Retrieving PaaS Usage from {}.".format(usageMonth))
+
+        usage = getusage(IC_ACCOUNT,iamToken, BILLING_ENDPOINT, usageMonth)
+        paasStart += relativedelta(months=1)
+        for u in usage['resources']:
+            for p in u['plans']:
+                for x in p['usage']:
+                    row = {
+                        'usageMonth': usageMonth,
+                        'recurringMonth': recurringMonth,
+                        'resource_name': u['resource_name'],
+                        'resource_id': u["resource_id"],
+                        'billable_cost': u["billable_cost"],
+                        'non_billable_cost': u["non_billable_cost"],
+                        'plan_name': p["plan_name"],
+                        'plan_id': p["plan_id"],
+                        'unit': x["unit"],
+                        'quantity': x["quantity"],
+                        'charges': x["cost"],
+                    }
+                    accountUsage = accountUsage.append(row, ignore_index=True)
+    return accountUsage
+
 
 if __name__ == "__main__":
     setup_logging()
@@ -370,6 +499,10 @@ if __name__ == "__main__":
     parser.add_argument("--COS_APIKEY", default=os.environ.get('COS_APIKEY', None), help="COS apikey to use for Object Storage.")
     parser.add_argument("--COS_INSTANCE_CRN", default=os.environ.get('COS_INSTANCE_CRN', None), help="COS Instance CRN to use for file upload.")
     parser.add_argument("--COS_BUCKET", default=os.environ.get('COS_BUCKET', None), help="COS Bucket name to use for file upload.")
+    parser.add_argument("--IC_ACCOUNT", default=os.environ.get('IC_ACCOUNT', None), help="IBM Cloud Account ID")
+    parser.add_argument("--IC_API_KEY", default=os.environ.get('IC_API_KEY', None), help="IBM Cloud API Key")
+    parser.add_argument("--BILLING_ENDPOINT", default=os.environ.get("BILLING_ENDPOINT", "https://billing.cloud.ibm.com"), help="IBM Cloud Billing API endpoint.")
+    parser.add_argument("--IAM_ENDPOINT", default=os.environ.get("IAM_ENDPOINT", "https://iam.cloud.ibm.com"), help="IBM Cloud IAM endpoint.")
 
     args = parser.parse_args()
 
@@ -423,7 +556,11 @@ if __name__ == "__main__":
 
     invoiceList = getInvoices(startdate, enddate)
     getInvoiceDetail(invoiceList)
-    createReport(args.output)
+    paas = False
+    if args.IC_ACCOUNT != None:
+        paasUsage = accountUsage(args.IC_ACCOUNT, args.IC_API_KEY, args.IAM_ENDPOINT, args.BILLING_ENDPOINT, startdate, enddate)
+        paas = True
+    createReport(args.output, paas)
 
     # upload created file to COS
     if args.COS_APIKEY != None:
