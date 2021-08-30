@@ -347,7 +347,7 @@ def createReport(filename, paas):
         worksheet = writer.sheets['PaaS_Summary']
         format1 = workbook.add_format({'num_format': '$#,##0.00'})
         format2 = workbook.add_format({'align': 'left'})
-        worksheet.set_column("A:A", 25, format2)
+        worksheet.set_column("A:A", 35, format2)
         worksheet.set_column("B:ZZ", 18, format1)
 
         paasSummaryPlan = pd.pivot_table(paasUsage, index=["resource_name", "plan_name"],
@@ -359,7 +359,7 @@ def createReport(filename, paas):
         worksheet = writer.sheets['PaaS_Plan_Summary']
         format1 = workbook.add_format({'num_format': '$#,##0.00'})
         format2 = workbook.add_format({'align': 'left'})
-        worksheet.set_column("A:B", 25, format2)
+        worksheet.set_column("A:B", 35, format2)
         worksheet.set_column("C:ZZ", 18, format1)
 
     writer.save()
