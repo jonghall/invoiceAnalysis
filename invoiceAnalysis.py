@@ -330,8 +330,13 @@ def createReport(filename, paas):
     if paas:
         paasUsage.to_excel(writer, 'PaaS_Usage')
         worksheet = writer.sheets['PaaS_Usage']
+        format1 = workbook.add_format({'num_format': '$#,##0.00'})
+        format2 = workbook.add_format({'align': 'left'})
+        worksheet.set_column("A:B", 20, format2)
+        worksheet.set_column("C:G", 30, format2)
+        worksheet.set_column("H:L", 18, format1)
 
-        paasSummary = pd.pivot_table(paasUsage, index=["resource_name", "plan_name"],
+        paasSummary = pd.pivot_table(paasUsage, index=["resource_name"],
                                         values=["charges"],
                                         columns=['usageMonth'],
                                         aggfunc={'charges': np.sum, }, margins=True, margins_name="Total",
@@ -340,8 +345,21 @@ def createReport(filename, paas):
         worksheet = writer.sheets['PaaS_Summary']
         format1 = workbook.add_format({'num_format': '$#,##0.00'})
         format2 = workbook.add_format({'align': 'left'})
-        worksheet.set_column("A:A", 20, format2)
+        worksheet.set_column("A:A", 25, format2)
         worksheet.set_column("B:ZZ", 18, format1)
+
+        paasSummaryPlan = pd.pivot_table(paasUsage, index=["resource_name", "plan_name"],
+                                     values=["charges"],
+                                     columns=['usageMonth'],
+                                     aggfunc={'charges': np.sum, }, margins=True, margins_name="Total",
+                                     fill_value=0)
+        paasSummaryPlan.to_excel(writer, 'PaaS_Summary_Plan')
+        worksheet = writer.sheets['PaaS_Summary_Plan']
+        format1 = workbook.add_format({'num_format': '$#,##0.00'})
+        format2 = workbook.add_format({'align': 'left'})
+        worksheet.set_column("A:B", 25, format2)
+        worksheet.set_column("C:ZZ", 18, format1)
+
     writer.save()
 
 def multi_part_upload(bucket_name, item_name, file_path):
