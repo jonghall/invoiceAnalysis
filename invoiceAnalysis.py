@@ -332,9 +332,11 @@ def createReport(filename, paas):
         worksheet = writer.sheets['PaaS_Usage']
         format1 = workbook.add_format({'num_format': '$#,##0.00'})
         format2 = workbook.add_format({'align': 'left'})
-        worksheet.set_column("A:B", 20, format2)
-        worksheet.set_column("C:G", 30, format2)
-        worksheet.set_column("H:L", 18, format1)
+        worksheet.set_column("A:C", 12, format2)
+        worksheet.set_column("D:E", 25, format2)
+        worksheet.set_column("F:G", 18, format1)
+        worksheet.set_column("H:I", 25, format2)
+        worksheet.set_column("J:J", 18, format1)
 
         paasSummary = pd.pivot_table(paasUsage, index=["resource_name"],
                                         values=["charges"],
@@ -459,13 +461,11 @@ def accountUsage(IC_ACCOUNT, IC_API_KEY, IAM_ENDPOINT, BILLING_ENDPOINT, startda
     iamToken = getiamtoken(IC_API_KEY, IAM_ENDPOINT)
 
     accountUsage = pd.DataFrame(columns=['usageMonth',
-                               'recurringMonth',
+                               'invoiceMonth',
                                'resource_name',
-                               'resource_id',
                                'plan_name',
-                               'plan_id',
-                               'billable_cost',
-                               'non_billable_cost',
+                               'billable_charges',
+                               'non_billable_charges',
                                'unit',
                                'quantity',
                                'charges']
@@ -488,13 +488,11 @@ def accountUsage(IC_ACCOUNT, IC_API_KEY, IAM_ENDPOINT, BILLING_ENDPOINT, startda
                 for x in p['usage']:
                     row = {
                         'usageMonth': usageMonth,
-                        'recurringMonth': recurringMonth,
+                        'invoiceMonth': recurringMonth,
                         'resource_name': u['resource_name'],
-                        'resource_id': u["resource_id"],
-                        'billable_cost': u["billable_cost"],
-                        'non_billable_cost': u["non_billable_cost"],
+                        'billable_charges': u["billable_cost"],
+                        'non_billable_charges': u["non_billable_cost"],
                         'plan_name': p["plan_name"],
-                        'plan_id': p["plan_id"],
                         'unit': x["unit"],
                         'quantity': x["quantity"],
                         'charges': x["cost"],
