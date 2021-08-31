@@ -27,7 +27,7 @@ pip install -r requirements.txt
 ````
 2.  Set environment variables. COS apikey is only required if you wish file to be written to COS, otherwise file will be written locally.
 ```bazaar
-![img_3.png](img_3.png)
+![env_variables.png](env_variables.png)
 ```
 
 3.  Run Python script.
