@@ -27,34 +27,31 @@ pip install -r requirements.txt
 ````
 2.  Set environment variables. COS apikey is only required if you wish file to be written to COS, otherwise file will be written locally.
 ```bazaar
-export SL_API_USERNAME=IBMxxxxx
-export SL_API_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxx
-export COS_APIKEY= xxxxxxxxxxxxxxxxxxxxx
-export COS_BUCKET = Bucket within COS instance to write report file to.
-export COS_ENDPOINT = Public COS Endpoint for bucket to write report file to
-export COS_INSTANCE_CRN = COS Service Instance CRN in which bucket is located.
+![img_3.png](img_3.png)
 ```
 
 3.  Run Python script.
 ```bazaar
-python invoiceAnalysis.py -s 2021/01 -e 2021/06 --output analysis_JanToMay.XLSX
+python invoiceAnalysis.py -s 2021-01 -e 2021-06
 ```
 
 ```bazaar
-usage: invoiceAnalysis.py [-h] [-u USERNAME] [-k APIKEY] [-s STARTDATE] [-e ENDDATE] [--output OUTPUT] [--COS_ENDPOINT COS_ENDPOINT] [--COS_APIKEY COS_APIKEY] [--COS_INSTANCE_CRN COS_INSTANCE_CRN] [--COS_BUCKET COS_BUCKET]
+usage: invoiceAnalysis.py [-h] [-s STARTDATE] [-e ENDDATE] [--SL_USER SL_USER] [--SL_API_KEY SL_API_KEY] [--SL_PRIVATE | --no-SL_PRIVATE] [--output OUTPUT] [--COS_ENDPOINT COS_ENDPOINT] [--COS_APIKEY COS_APIKEY] [--COS_INSTANCE_CRN COS_INSTANCE_CRN] [--COS_BUCKET COS_BUCKET]
+                          [--IC_ACCOUNT IC_ACCOUNT] [--IC_API_KEY IC_API_KEY] [--BILLING_ENDPOINT BILLING_ENDPOINT] [--IAM_ENDPOINT IAM_ENDPOINT]
 
-Export detail from invoices between dates sorted by Hourly vs Monthly between Start and End date.
+Export detail to Excel file from all IBM Cloud Classic invoices types between two months.
 
 optional arguments:
   -h, --help            show this help message and exit
-  -u USERNAME, --username USERNAME
-                        IBM Cloud Classic API Key Username
-  -k APIKEY, --apikey APIKEY
-                        IBM Cloud Classic API Key
   -s STARTDATE, --startdate STARTDATE
                         Start Year & Month in format YYYY/MM
   -e ENDDATE, --enddate ENDDATE
                         End Year & Month in format YYYY/MM
+  --SL_USER SL_USER     IBM Cloud Classic API Key Username
+  --SL_API_KEY SL_API_KEY
+                        IBM Cloud Classic API Key
+  --SL_PRIVATE, --no-SL_PRIVATE
+                        Use IBM Cloud Classic Private API Endpoint (default: False)
   --output OUTPUT       Filename Excel output file. (including extension of .xlsx)
   --COS_ENDPOINT COS_ENDPOINT
                         COS endpoint to use for Object Storage.
@@ -64,7 +61,13 @@ optional arguments:
                         COS Instance CRN to use for file upload.
   --COS_BUCKET COS_BUCKET
                         COS Bucket name to use for file upload.
-
-
+  --IC_ACCOUNT IC_ACCOUNT
+                        IBM Cloud Account ID
+  --IC_API_KEY IC_API_KEY
+                        IBM Cloud API Key
+  --BILLING_ENDPOINT BILLING_ENDPOINT
+                        IBM Cloud Billing API endpoint.
+  --IAM_ENDPOINT IAM_ENDPOINT
+                        IBM Cloud IAM endpoint.
 
 ```

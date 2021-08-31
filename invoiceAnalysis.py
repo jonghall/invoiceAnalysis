@@ -504,12 +504,12 @@ def accountUsage(IC_ACCOUNT, IC_API_KEY, IAM_ENDPOINT, BILLING_ENDPOINT, startda
 if __name__ == "__main__":
     setup_logging()
     parser = argparse.ArgumentParser(
-        description="Export detail from invoices between dates sorted by Hourly vs Monthly "
-                    " between Start and End date.")
-    parser.add_argument("-u", "--username", default=os.environ.get('SL_USER', None), help="IBM Cloud Classic API Key Username")
-    parser.add_argument("-k", "--apikey", default=os.environ.get('SL_API_KEY', None), help="IBM Cloud Classic API Key")
+        description="Export detail to Excel file from all IBM Cloud Classic invoices types between two months.")
     parser.add_argument("-s", "--startdate", default=os.environ.get('startdate', None),help="Start Year & Month in format YYYY/MM")
     parser.add_argument("-e", "--enddate", default=os.environ.get('enddate', None),help="End Year & Month in format YYYY/MM")
+    parser.add_argument("--SL_USER", default=os.environ.get('SL_USER', None), help="IBM Cloud Classic API Key Username")
+    parser.add_argument("--SL_API_KEY", default=os.environ.get('SL_API_KEY', None), help="IBM Cloud Classic API Key")
+    parser.add_argument("--SL_PRIVATE", default=False, action=argparse.BooleanOptionalAction, help="Use IBM Cloud Classic Private API Endpoint")
     parser.add_argument("--output", default=os.environ.get('output', 'invoice-analysis.xlsx'), help="Filename Excel output file. (including extension of .xlsx)")
     parser.add_argument("--COS_ENDPOINT", default=os.environ.get('COS_ENDPOINT', None), help="COS endpoint to use for Object Storage.")
     parser.add_argument("--COS_APIKEY", default=os.environ.get('COS_APIKEY', None), help="COS apikey to use for Object Storage.")
@@ -519,14 +519,18 @@ if __name__ == "__main__":
     parser.add_argument("--IC_API_KEY", default=os.environ.get('IC_API_KEY', None), help="IBM Cloud API Key")
     parser.add_argument("--BILLING_ENDPOINT", default=os.environ.get("BILLING_ENDPOINT", "https://billing.cloud.ibm.com"), help="IBM Cloud Billing API endpoint.")
     parser.add_argument("--IAM_ENDPOINT", default=os.environ.get("IAM_ENDPOINT", "https://iam.cloud.ibm.com"), help="IBM Cloud IAM endpoint.")
-
     args = parser.parse_args()
 
-    if args.username == None or args.apikey == None:
+    if args.SL_PRIVATE:
+        SL_ENDPOINT = "https://api.service.softlayer.com/xmlrpc/v3.1"
+    else:
+        SL_ENDPOINT = "https://api.softlayer.com/xmlrpc/v3.1"
+
+    if args.SL_USER == None or args.SL_API_KEY == None:
         logging.warning("IBM Cloud Classic Username & apiKey not specified and not set via environment variables, using default API keys.")
         client = SoftLayer.Client()
     else:
-        client = SoftLayer.Client(username=args.username, api_key=args.apikey)
+        client = SoftLayer.Client(username=args.SL_USER, api_key=args.SL_API_KEY, endpoint_url=SL_ENDPOINT)
 
     if args.startdate == None:
         logging.error("You must provide a start month and year date in the format of YYYY/MM.")
