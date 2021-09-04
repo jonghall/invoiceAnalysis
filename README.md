@@ -41,6 +41,7 @@ Excel worksheet for review.  Each tab has a breakdown based on:
     12. Click Done.
     13. Click Create.
 2. Create configmaps and secrets.
+    ![env_variables.png](env_variables.png)
     1. From project list, choose newly created project.
     2. Select secrets and configmaps
     3. click create, choose config map, and give it a name. Add the following key value pairs
@@ -52,8 +53,10 @@ Excel worksheet for review.  Each tab has a breakdown based on:
         - ***COS_APIKEY*** = your COS Api Key Id with writter access to appropriate bucket
         - ***SL_API_KEY*** = your IBM Cloud Classic Infrastructure API Key
         - ***SL_USER*** = your IBM Cloud Classic Infrastructure User Id
+        - ***IC_API_KEY*** = an IBM Cloud API Key with Billing access to IBM Cloud Account
+        - ***IC_ACCOUNT*** = the IBM Cloud Account ID
 
-3. Choose the job previously created.
+4. Choose the job previously created.
     1. Click on the Environment variables tab.
     2. Click add, choose reference to full configmap, and choose configmap created in previous step and click add.
     3. Click add, choose reference to full secret, and choose secrets created in previous step and click add.
@@ -61,5 +64,5 @@ Excel worksheet for review.  Each tab has a breakdown based on:
         -  ***startdate*** = start year & month of invoice analysis in YYYY/MM format
         -  ***enddate*** = end year & month invoice analysis in YYYY/MM format
         -  ***output*** = report filename (including extension of XLSX to be written to COS bucket)
-4. to Run report click ***Submit job***
+5. to Run report click ***Submit job***
 5, Logging for job can be found from job screen, by clicking Actions, Logging
