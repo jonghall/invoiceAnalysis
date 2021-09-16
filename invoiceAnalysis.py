@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# invoiceAnalysis.py - A script to export IBM Cloud Classic Infrastructure Invoices
+# invoiceAnalysis.py - Export usage detail by invoice month to an Excel file for all IBM Cloud Classic invoices and PaaS Consumption.
 # Author: Jon Hall
 # Copyright (c) 2021
 #
@@ -16,9 +16,32 @@
 #
 #   Get RECURRING, NEW, and Onetime Invoices with a invoice amount > 0
 #   Return toplevel items and export to excel spreadsheet
+#
+# usage: invoiceAnalysis.py [-h] -k apikey -s YYYY-MM -e YYYY-MM [--COS_APIKEY COS_APIKEY] [--COS_ENDPOINT COS_ENDPOINT] [--COS_INSTANCE_CRN COS_INSTANCE_CRN] [--COS_BUCKET COS_BUCKET] [--output OUTPUT] [--SL_PRIVATE | --no-SL_PRIVATE]
+# Export usage detail by invoice month to an Excel file for all IBM Cloud Classic invoices and PaaS Consumption.
+# optional arguments:
+#   -h, --help            show this help message and exit
+#   -k apikey, --IC_API_KEY apikey
+#                         IBM Cloud API Key
+#   -s YYYY-MM, --startdate YYYY-MM
+#                        Start Year & Month in format YYYY-MM
+#   -e YYYY-MM, --enddate YYYY-MM
+#                         End Year & Month in format YYYY-MM
+#   --COS_APIKEY COS_APIKEY
+#                         COS apikey to use for Object Storage.
+#   --COS_ENDPOINT COS_ENDPOINT
+#                         COS endpoint to use for Object Storage.
+#   --COS_INSTANCE_CRN COS_INSTANCE_CRN
+#                         COS Instance CRN to use for file upload.
+#   --COS_BUCKET COS_BUCKET
+#                         COS Bucket name to use for file upload.
+#   --output OUTPUT       Filename Excel output file. (including extension of .xlsx)
+#   --SL_PRIVATE, --no-SL_PRIVATE
+#                         Use IBM Cloud Classic Private API Endpoint (default: False)
+
 __author__ = 'jonhall'
 
-import SoftLayer, argparse, os, logging, logging.config, json, requests, urllib
+import SoftLayer, argparse, os, logging, logging.config, json
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import pandas as pd
@@ -26,6 +49,9 @@ import numpy as np
 from logdna import LogDNAHandler
 import ibm_boto3
 from ibm_botocore.client import Config, ClientError
+from ibm_platform_services import IamIdentityV1, UsageReportsV4
+from ibm_cloud_sdk_core import ApiException
+from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
 
 def setup_logging(default_path='logging.json', default_level=logging.info, env_key='LOG_CFG'):
 
@@ -65,7 +91,23 @@ def getSLIClinvoicedate(invoiceDate):
         year = year + 1
     return datetime(year, month, 1).strftime('%Y-%m')
 
-def getInvoices(startdate, enddate):
+def getInvoiceDates(startdate,enddate):
+    # Adjust dates to match SLIC Invoice cutoffs
+    month = int(startdate[5:7]) - 1
+    year = int(startdate[0:4])
+    if month == 0:
+        year = year - 1
+        month = 12
+    day = 20
+    startdate = datetime(year, month, day).strftime('%m/%d/%Y')
+
+    month = int(enddate[5:7])
+    year = int(enddate[0:4])
+    day = 19
+    enddate = datetime(year, month, day).strftime('%m/%d/%Y')
+    return startdate, enddate
+
+def getInvoiceList(startdate, enddate):
     #
     # GET LIST OF INVOICES BETWEEN DATES
     #
@@ -89,11 +131,38 @@ def getInvoices(startdate, enddate):
         quit()
     return invoiceList
 
-def getInvoiceDetail(invoiceList):
+def getInvoiceDetail(startdate, enddate):
     #
     # GET InvoiceDetail
     #
-    global df, invoicePivot
+    global IC_API_KEY, client, SL_ENDPOINT
+
+    # Create Classic infra API client
+    client = SoftLayer.Client(username="apikey", api_key=IC_API_KEY, endpoint_url=SL_ENDPOINT)
+
+    # get list of invoices between start date and enddate
+    invoiceList = getInvoiceList(startdate, enddate)
+
+    # Create dataframe to work with for classic infrastructure invoices
+    df = pd.DataFrame(columns=['Portal_Invoice_Date',
+                               'IBM_Invoice_Month',
+                               'Portal_Invoice_Number',
+                               'Type',
+                               'BillingItemId',
+                               'hostName',
+                               'Category',
+                               'Description',
+                               'Memory',
+                               'OS',
+                               'Hourly',
+                               'Usage',
+                               'Hours',
+                               'HourlyRate',
+                               'totalRecurringCharge',
+                               'totalOneTimeAmount',
+                               'InvoiceTotal',
+                               'InvoiceRecurring'])
+
     for invoice in invoiceList:
         if float(invoice['invoiceTotalAmount']) == 0:
             #Skip because zero balance
@@ -200,12 +269,12 @@ def getInvoiceDetail(invoiceList):
                        'Type': invoiceType
                         }
 
-
                 df = df.append(row, ignore_index=True)
+    return df
 
-def createReport(filename, paas):
+def createReport(filename):
     # Write dataframe to excel
-    global df, paasUsage
+    global classicUsage, paasUsage, useMonth
     logging.info("Creating Pivots File.")
     writer = pd.ExcelWriter(filename, engine='xlsxwriter')
     workbook = writer.book
@@ -213,7 +282,7 @@ def createReport(filename, paas):
     #
     # Write detail tab
     #
-    df.to_excel(writer, 'Detail')
+    classicUsage.to_excel(writer, 'Detail')
     usdollar = workbook.add_format({'num_format': '$#,##0.00'})
 
     worksheet = writer.sheets['Detail']
@@ -223,8 +292,8 @@ def createReport(filename, paas):
     # Map Portal Invoices to SLIC Invoices
     #
 
-    df["totalAmount"] = df["totalOneTimeAmount"] + df["totalRecurringCharge"]
-    SLICInvoice = pd.pivot_table(df,
+    classicUsage["totalAmount"] = classicUsage["totalOneTimeAmount"] + classicUsage["totalRecurringCharge"]
+    SLICInvoice = pd.pivot_table(classicUsage,
                                  index=["IBM_Invoice_Month", "Portal_Invoice_Date", "Portal_Invoice_Number", "Type"],
                                  values=["totalAmount"],
                                  aggfunc={'totalAmount': np.sum}, fill_value=0)
@@ -240,10 +309,10 @@ def createReport(filename, paas):
     #
     # Build a pivot table by Invoice Type
     #
-    invoiceSummary = pd.pivot_table(df, index=["Type", "Category"],
-                            values=["totalAmount"],
-                            columns=['IBM_Invoice_Month'],
-                            aggfunc={'totalAmount': np.sum,}, margins=True, margins_name="Total", fill_value=0).\
+    invoiceSummary = pd.pivot_table(classicUsage, index=["Type", "Category"],
+                                    values=["totalAmount"],
+                                    columns=['IBM_Invoice_Month'],
+                                    aggfunc={'totalAmount': np.sum,}, margins=True, margins_name="Total", fill_value=0).\
                                     rename(columns={'totalRecurringCharge': 'TotalRecurring'})
     invoiceSummary.to_excel(writer, 'InvoiceSummary')
     worksheet = writer.sheets['InvoiceSummary']
@@ -257,10 +326,10 @@ def createReport(filename, paas):
     #
     # Build a pivot table by Category with totalRecurringCharges
 
-    categorySummary = pd.pivot_table(df, index=["Category", "Description"],
-                            values=["totalAmount"],
-                            columns=['IBM_Invoice_Month'],
-                            aggfunc={'totalAmount': np.sum}, margins=True, margins_name="Total", fill_value=0)
+    categorySummary = pd.pivot_table(classicUsage, index=["Category", "Description"],
+                                     values=["totalAmount"],
+                                     columns=['IBM_Invoice_Month'],
+                                     aggfunc={'totalAmount': np.sum}, margins=True, margins_name="Total", fill_value=0)
     categorySummary.to_excel(writer, 'CategorySummary')
     worksheet = writer.sheets['CategorySummary']
     format1 = workbook.add_format({'num_format': '$#,##0.00'})
@@ -272,7 +341,7 @@ def createReport(filename, paas):
     #
     # Build a pivot table for Hourly VSI's with totalRecurringCharges
     #
-    virtualServers = df.query('Category == ["Computing Instance"] and Hourly == [True]')
+    virtualServers = classicUsage.query('Category == ["Computing Instance"] and Hourly == [True]')
     if len(virtualServers) > 0:
         virtualServerPivot = pd.pivot_table(virtualServers, index=["Description", "OS"],
                                 values=["Hours", "totalRecurringCharge"],
@@ -285,7 +354,7 @@ def createReport(filename, paas):
     #
     # Build a pivot table for Monthly VSI's with totalRecurringCharges
     #
-    monthlyVirtualServers = df.query('Category == ["Computing Instance"] and Hourly == [False]')
+    monthlyVirtualServers = classicUsage.query('Category == ["Computing Instance"] and Hourly == [False]')
     if len(monthlyVirtualServers) > 0:
         virtualServerPivot = pd.pivot_table(monthlyVirtualServers, index=["Description", "OS"],
                                 values=["totalRecurringCharge"],
@@ -299,7 +368,7 @@ def createReport(filename, paas):
     #
     # Build a pivot table for Hourly Bare Metal with totalRecurringCharges
     #
-    bareMetalServers = df.query('Category == ["Server"]and Hourly == [True]')
+    bareMetalServers = classicUsage.query('Category == ["Server"]and Hourly == [True]')
     if len(bareMetalServers) > 0:
         bareMetalServerPivot = pd.pivot_table(bareMetalServers, index=["Description", "OS"],
                                 values=["Hours", "totalRecurringCharge"],
@@ -312,7 +381,7 @@ def createReport(filename, paas):
     #
     # Build a pivot table for Monthly Bare Metal with totalRecurringCharges
     #
-    monthlyBareMetalServers = df.query('Category == ["Server"] and Hourly == [False]')
+    monthlyBareMetalServers = classicUsage.query('Category == ["Server"] and Hourly == [False]')
     if len(monthlyBareMetalServers) > 0:
         monthlyBareMetalServerPivot = pd.pivot_table(monthlyBareMetalServers, index=["Description", "OS"],
                                 values=["totalRecurringCharge"],
@@ -327,7 +396,7 @@ def createReport(filename, paas):
         worksheet.set_column("B:B", 40, format2)
 
     # IF PaaS credential included add usage reports
-    if paas:
+    if len(paasUsage) >0:
         paasUsage.to_excel(writer, 'PaaS_Usage')
         worksheet = writer.sheets['PaaS_Usage']
         format1 = workbook.add_format({'num_format': '$#,##0.00'})
@@ -340,7 +409,7 @@ def createReport(filename, paas):
 
         paasSummary = pd.pivot_table(paasUsage, index=["resource_name"],
                                         values=["charges"],
-                                        columns=['usageMonth'],
+                                        columns=[useMonth],
                                         aggfunc={'charges': np.sum, }, margins=True, margins_name="Total",
                                         fill_value=0)
         paasSummary.to_excel(writer, 'PaaS_Summary')
@@ -352,7 +421,7 @@ def createReport(filename, paas):
 
         paasSummaryPlan = pd.pivot_table(paasUsage, index=["resource_name", "plan_name"],
                                      values=["charges"],
-                                     columns=['usageMonth'],
+                                     columns=[useMonth],
                                      aggfunc={'charges': np.sum, }, margins=True, margins_name="Total",
                                      fill_value=0)
         paasSummaryPlan.to_excel(writer, 'PaaS_Plan_Summary')
@@ -392,73 +461,50 @@ def multi_part_upload(bucket_name, item_name, file_path):
     except Exception as e:
         logging.error("Unable to complete multi-part upload: {0}".format(e))
 
-def getiamtoken(apiKey,iam_endpoint):
-    ################################################
-    ## Get Bearer Token using apiKey
-    ################################################
+def getAccountId(IC_API_KEY):
+    ##########################################################
+    ## Get Account from the passed API Key
+    ##########################################################
 
-    headers = {"Content-Type": "application/x-www-form-urlencoded",
-               "Accept": "application/json"}
-
-    parms = {"grant_type": "urn:ibm:params:oauth:grant-type:apikey", "apikey": apiKey}
+    logging.info("Retrieving IBM Cloud Account ID from ApiKey.")
+    try:
+        authenticator = IAMAuthenticator(IC_API_KEY)
+    except ApiException as e:
+        logging.error("API exception {}.".format(str(e)))
+        quit()
+    try:
+        iam_identity_service = IamIdentityV1(authenticator=authenticator)
+    except ApiException as e:
+        logging.error("API exception {}.".format(str(e)))
+        quit()
 
     try:
-        resp = requests.post(iam_endpoint + "/identity/token?" + urllib.parse.urlencode(parms),
-                             headers=headers, timeout=30)
-        resp.raise_for_status()
-    except requests.exceptions.ConnectionError as errc:
-        logging.error("Error Connecting: {}".format(errc))
-        quit()
-    except requests.exceptions.Timeout as errt:
-        logging.error("Timeout Error: {}".format(errt))
-        quit()
-    except requests.exceptions.HTTPError as errb:
-        logging.error("Invalid token request {} {}.".format(errb, resp.text))
+        api_key = iam_identity_service.get_api_keys_details(
+          iam_api_key=IC_API_KEY
+        ).get_result()
+    except ApiException as e:
+        logging.error("API exception {}.".format(str(e)))
         quit()
 
-    iam = resp.json()
+    return api_key["account_id"]
 
-    iamtoken = {"Authorization": "Bearer " + iam["access_token"]}
-
-    return iamtoken
-
-def getusage(accountId, iamToken, BILLING_ENDPOINT, month):
-    # Get a list of current resource groups in accountId
-
-    try:
-        resp = requests.get(BILLING_ENDPOINT + '/v4/accounts/' + accountId + '/usage/' + month + "?_names=True",  headers=iamToken, timeout=30)
-        resp.raise_for_status()
-    except requests.exceptions.ConnectionError as errc:
-        logging.error("Error Connecting to billing endpoint: {}.".format(errc))
-        quit()
-    except requests.exceptions.Timeout as errt:
-        logging.error("Timeout Error: {}".format(errt))
-        quit()
-    except requests.exceptions.HTTPError as errb:
-        if resp.status_code == 400:
-            logging.error("Invalid get billing usage request {}.".format(errb))
-            quit()
-        elif resp.status_code == 401:
-            logging.error("Your access token is invalid or authentication of your token failed.")
-            quit()
-        elif resp.status_code == 403:
-            logging.error("Your access token is valid but does not have the necessary permissions to access this resource.")
-            quit()
-
-    if resp.status_code == 200:
-        accountUsage = json.loads(resp.content)
-    else:
-        logging.error("Unexpected Error getting account usage, error code = {}.".format(resp.status_code))
-        quit()
-    return accountUsage
-
-def accountUsage(IC_ACCOUNT, IC_API_KEY, IAM_ENDPOINT, BILLING_ENDPOINT, startdate, enddate):
+def accountUsage(startdate, enddate):
     ##########################################################
     ## Get Usage for Account matching recuring invoice periods
     ##########################################################
+    global IC_ACCOUNT_ID, IC_API_KEY
 
-    # Get IBM Cloud IAM token
-    iamToken = getiamtoken(IC_API_KEY, IAM_ENDPOINT)
+
+    try:
+        authenticator = IAMAuthenticator(IC_API_KEY)
+    except ApiException as e:
+        logging.error("API exception {}.".format(str(e)))
+        quit()
+    try:
+        usage_reports_service = UsageReportsV4(authenticator=authenticator)
+    except ApiException as e:
+        logging.error("API exception {}.".format(str(e)))
+        quit()
 
     accountUsage = pd.DataFrame(columns=['usageMonth',
                                'invoiceMonth',
@@ -480,8 +526,15 @@ def accountUsage(IC_ACCOUNT, IC_API_KEY, IAM_ENDPOINT, BILLING_ENDPOINT, startda
         recurringMonth = paasStart + relativedelta(months=2)
         recurringMonth = recurringMonth.strftime('%Y-%m')
         logging.info("Retrieving PaaS Usage from {}.".format(usageMonth))
-
-        usage = getusage(IC_ACCOUNT,iamToken, BILLING_ENDPOINT, usageMonth)
+        try:
+            usage = usage_reports_service.get_account_usage(
+                account_id=IC_ACCOUNT_ID,
+                billingmonth=usageMonth,
+                names=True
+            ).get_result()
+        except ApiException as e:
+            logging.error("API exception {}.".format(str(e)))
+            quit()
         paasStart += relativedelta(months=1)
         for u in usage['resources']:
             for p in u['plans']:
@@ -500,89 +553,49 @@ def accountUsage(IC_ACCOUNT, IC_API_KEY, IAM_ENDPOINT, BILLING_ENDPOINT, startda
                     accountUsage = accountUsage.append(row, ignore_index=True)
     return accountUsage
 
-
 if __name__ == "__main__":
     setup_logging()
     parser = argparse.ArgumentParser(
-        description="Export detail to Excel file from all IBM Cloud Classic invoices types between two months.")
-    parser.add_argument("-s", "--startdate", default=os.environ.get('startdate', None),help="Start Year & Month in format YYYY/MM")
-    parser.add_argument("-e", "--enddate", default=os.environ.get('enddate', None),help="End Year & Month in format YYYY/MM")
-    parser.add_argument("--SL_USER", default=os.environ.get('SL_USER', None), help="IBM Cloud Classic API Key Username")
-    parser.add_argument("--SL_API_KEY", default=os.environ.get('SL_API_KEY', None), help="IBM Cloud Classic API Key")
-    parser.add_argument("--SL_PRIVATE", default=False, action=argparse.BooleanOptionalAction, help="Use IBM Cloud Classic Private API Endpoint")
-    parser.add_argument("--output", default=os.environ.get('output', 'invoice-analysis.xlsx'), help="Filename Excel output file. (including extension of .xlsx)")
-    parser.add_argument("--COS_ENDPOINT", default=os.environ.get('COS_ENDPOINT', None), help="COS endpoint to use for Object Storage.")
+        description="Export usage detail by invoice month to an Excel file for all IBM Cloud Classic invoices and PaaS Consumption.")
+    parser.add_argument("-k", "--IC_API_KEY", default=os.environ.get('IC_API_KEY', None), required=True, metavar="apikey", help="IBM Cloud API Key")
+    parser.add_argument("-s", "--startdate", default=os.environ.get('startdate', None), required=True, metavar="YYYY-MM", help="Start Year & Month in format YYYY-MM")
+    parser.add_argument("-e", "--enddate", default=os.environ.get('enddate', None),required=True, metavar="YYYY-MM", help="End Year & Month in format YYYY-MM")
     parser.add_argument("--COS_APIKEY", default=os.environ.get('COS_APIKEY', None), help="COS apikey to use for Object Storage.")
+    parser.add_argument("--COS_ENDPOINT", default=os.environ.get('COS_ENDPOINT', None), help="COS endpoint to use for Object Storage.")
     parser.add_argument("--COS_INSTANCE_CRN", default=os.environ.get('COS_INSTANCE_CRN', None), help="COS Instance CRN to use for file upload.")
     parser.add_argument("--COS_BUCKET", default=os.environ.get('COS_BUCKET', None), help="COS Bucket name to use for file upload.")
-    parser.add_argument("--IC_ACCOUNT", default=os.environ.get('IC_ACCOUNT', None), help="IBM Cloud Account ID")
-    parser.add_argument("--IC_API_KEY", default=os.environ.get('IC_API_KEY', None), help="IBM Cloud API Key")
-    parser.add_argument("--BILLING_ENDPOINT", default=os.environ.get("BILLING_ENDPOINT", "https://billing.cloud.ibm.com"), help="IBM Cloud Billing API endpoint.")
-    parser.add_argument("--IAM_ENDPOINT", default=os.environ.get("IAM_ENDPOINT", "https://iam.cloud.ibm.com"), help="IBM Cloud IAM endpoint.")
+    parser.add_argument("--output", default=os.environ.get('output', 'invoice-analysis.xlsx'), help="Filename Excel output file. (including extension of .xlsx)")
+    parser.add_argument("--SL_PRIVATE", default=False, action=argparse.BooleanOptionalAction, help="Use IBM Cloud Classic Private API Endpoint")
+    parser.add_argument("--PAAS_USE_USAGE_MONTH", default=False, action=argparse.BooleanOptionalAction, help="Use actual PaaS usage month for pivots instead of IBM Invoice Month which matches IBM invoices.")
     args = parser.parse_args()
 
+    IC_API_KEY = args.IC_API_KEY
+
+    # Calculate invoice dates based on SLIC invoice cutoffs.
+    startdate, enddate = getInvoiceDates(args.startdate, args.enddate)
+
+    # Change endpoint to private Endpoint if command line open chosen
     if args.SL_PRIVATE:
         SL_ENDPOINT = "https://api.service.softlayer.com/xmlrpc/v3.1"
     else:
         SL_ENDPOINT = "https://api.softlayer.com/xmlrpc/v3.1"
 
-    if args.SL_USER == None or args.SL_API_KEY == None:
-        logging.warning("IBM Cloud Classic Username & apiKey not specified and not set via environment variables, using default API keys.")
-        client = SoftLayer.Client()
+    #  Retrieve Invoices from classic
+    classicUsage = getInvoiceDetail(startdate, enddate)
+
+    # Retrieve Usage from IBM Cloud
+    IC_ACCOUNT_ID = getAccountId(IC_API_KEY)
+    if args.PAAS_USE_USAGE_MONTH:
+        useMonth = "usageMonth"
     else:
-        client = SoftLayer.Client(username=args.SL_USER, api_key=args.SL_API_KEY, endpoint_url=SL_ENDPOINT)
+        useMonth = "invoiceMonth"
 
-    if args.startdate == None:
-        logging.error("You must provide a start month and year date in the format of YYYY/MM.")
-        quit()
-    else:
-        month = int(args.startdate[5:7]) - 1
-        year = int(args.startdate[0:4])
-        if month == 0:
-            year = year - 1
-            month = 12
-        day = 20
-        startdate = datetime(year, month, day).strftime('%m/%d/%Y')
+    paasUsage = accountUsage(startdate, enddate)
 
-    if args.enddate == None:
-        logging.error("You must provide an end date in the format of MM/DD/YYYY.")
-        quit()
-    else:
-        month = int(args.enddate[5:7])
-        year = int(args.enddate[0:4])
-        day = 19
-        enddate = datetime(year, month, day).strftime('%m/%d/%Y')
+    # Build Exel Report
+    createReport(args.output)
 
-    # Create dataframe to work with
-
-    df = pd.DataFrame(columns=['Portal_Invoice_Date',
-                               'IBM_Invoice_Month',
-                               'Portal_Invoice_Number',
-                               'Type',
-                               'BillingItemId',
-                               'hostName',
-                               'Category',
-                               'Description',
-                               'Memory',
-                               'OS',
-                               'Hourly',
-                               'Usage',
-                               'Hours',
-                               'HourlyRate',
-                               'totalRecurringCharge',
-                               'totalOneTimeAmount',
-                               'InvoiceTotal',
-                               'InvoiceRecurring'])
-
-    invoiceList = getInvoices(startdate, enddate)
-    getInvoiceDetail(invoiceList)
-    paas = False
-    if args.IC_ACCOUNT != None:
-        paasUsage = accountUsage(args.IC_ACCOUNT, args.IC_API_KEY, args.IAM_ENDPOINT, args.BILLING_ENDPOINT, startdate, enddate)
-        paas = True
-    createReport(args.output, paas)
-
-    # upload created file to COS
+    # upload created file to COS if COS credentials provided
     if args.COS_APIKEY != None:
         cos = ibm_boto3.resource("s3",
                                  ibm_api_key_id=args.COS_APIKEY,
@@ -591,7 +604,6 @@ if __name__ == "__main__":
                                  endpoint_url=args.COS_ENDPOINT
                                  )
         multi_part_upload(args.COS_BUCKET, args.output, "./" + args.output)
-
         #cleanup file
         logging.info("Deleting {} local file.".format(args.output))
         os.remove("./"+args.output)
