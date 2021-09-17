@@ -34,7 +34,7 @@ pip install -r requirements.txt
 ![env_variables.png](env_variables.png)
 
 3. Run Python script.
-Note script no longer requires IBM Cloud Classic API Keys to execute, and instead uses a single IBM Cloud API Key to access both classic invoices and IBM Cloud Usage.
+*Note script no longer requires IBM Cloud Classic API Keys to execute, and instead uses a single IBM Cloud API Key to access both classic invoices and IBM Cloud Usage.*
 
 ```bazaar
 export IC_API_KEY=<ibm cloud apikey>
