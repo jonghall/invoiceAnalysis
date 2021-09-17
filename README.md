@@ -30,10 +30,12 @@ Instructions:
 ````
 pip install -r requirements.txt
 ````
-2.  Set environment variables which can be used.  IBM COS only required if file needs to be written to COS, otherwise file will be written locally.
+2. Set environment variables which can be used.  IBM COS only required if file needs to be written to COS, otherwise file will be written locally.
 ![env_variables.png](env_variables.png)
 
-3.  Run Python script.
+3. Run Python script.
+Note script no longer requires IBM Cloud Classic API Keys to execute, and instead uses a single IBM Cloud API Key to access both classic invoices and IBM Cloud Usage.
+
 ```bazaar
 export IC_API_KEY=<ibm cloud apikey>
 python invoiceAnalysis.py -s 2021-01 -e 2021-06
