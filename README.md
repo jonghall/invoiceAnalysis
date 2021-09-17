@@ -52,16 +52,17 @@ Excel worksheet for review.  Each tab has a breakdown based on:
     6 click create, choose secrets, and give it a name. Add the following key value pairs
          - ***IC_API_KEY*** = an IBM Cloud API Key with Billing access to IBM Cloud Account
          - ***COS_APIKEY*** = your COS Api Key Id with writter access to appropriate bucket
-
-
-
-4. Choose the job previously created.
-    1. Click on the Environment variables tab.
-    2. Click add, choose reference to full configmap, and choose configmap created in previous step and click add.
-    3. Click add, choose reference to full secret, and choose secrets created in previous step and click add.
-    4. Click add, choose literal value (click add after each, and repeat)
+3. Choose the job previously created.
+    5. Click on the Environment variables tab.
+    6. Click add, choose reference to full configmap, and choose configmap created in previous step and click add.
+    7. Click add, choose reference to full secret, and choose secrets created in previous step and click add.
+    8. Click add, choose literal value (click add after each, and repeat)
         -  ***startdate*** = start year & month of invoice analysis in YYYY/MM format
         -  ***enddate*** = end year & month invoice analysis in YYYY/MM format
         -  ***output*** = report filename (including extension of XLSX to be written to COS bucket)
-5. to Run report click ***Submit job***
+4. to Run report click ***Submit job***
 5, Logging for job can be found from job screen, by clicking Actions, Logging
+</br>
+*Note invoiceAnalysis no longer requires IBM Cloud Classic API keys to execute, and instead uses a single IBM Cloud API Key
+(with billing View Access) to access both classic invoices and PaaS Usage for the cloud account.   Currently, you can provide a separate COS ApiKey, 
+Service, and bucket information to support the ability to write to a bucket in if a different Cloud Account than the billing data is analyzed against.*
