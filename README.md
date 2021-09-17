@@ -63,6 +63,6 @@ Excel worksheet for review.  Each tab has a breakdown based on:
 4. to Run report click ***Submit job***
 5, Logging for job can be found from job screen, by clicking Actions, Logging
 </br>
-*Note invoiceAnalysis no longer requires IBM Cloud Classic API keys to execute, and instead uses a single IBM Cloud API Key
+* Note invoiceAnalysis no longer requires IBM Cloud Classic API keys to execute, and instead uses a single IBM Cloud API Key
 (with billing View Access) to access both classic invoices and PaaS Usage for the cloud account.   Currently, you can provide a separate COS ApiKey, 
-Service, and bucket information to support the ability to write to a bucket in if a different Cloud Account than the billing data is analyzed against.*
+Service, and bucket information to support the ability to write to a bucket in if a different Cloud Account than the billing data is analyzed against.
