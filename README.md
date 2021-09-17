@@ -50,11 +50,10 @@ Excel worksheet for review.  Each tab has a breakdown based on:
         - ***COS_INSTANCE_CRN*** = COS Service Instance CRN in which bucket is located.
     4. Select secrets and configmaps (again)
     6 click create, choose secrets, and give it a name. Add the following key value pairs
-        - ***COS_APIKEY*** = your COS Api Key Id with writter access to appropriate bucket
-        - ***SL_API_KEY*** = your IBM Cloud Classic Infrastructure API Key
-        - ***SL_USER*** = your IBM Cloud Classic Infrastructure User Id
-        - ***IC_API_KEY*** = an IBM Cloud API Key with Billing access to IBM Cloud Account
-        - ***IC_ACCOUNT*** = the IBM Cloud Account ID
+         - ***IC_API_KEY*** = an IBM Cloud API Key with Billing access to IBM Cloud Account
+         - ***COS_APIKEY*** = your COS Api Key Id with writter access to appropriate bucket
+
+
 
 4. Choose the job previously created.
     1. Click on the Environment variables tab.
