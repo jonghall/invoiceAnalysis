@@ -557,9 +557,9 @@ if __name__ == "__main__":
     setup_logging()
     parser = argparse.ArgumentParser(
         description="Export usage detail by invoice month to an Excel file for all IBM Cloud Classic invoices and PaaS Consumption.")
-    parser.add_argument("-k", "--IC_API_KEY", default=os.environ.get('IC_API_KEY', None), required=True, metavar="apikey", help="IBM Cloud API Key")
-    parser.add_argument("-s", "--startdate", default=os.environ.get('startdate', None), required=True, metavar="YYYY-MM", help="Start Year & Month in format YYYY-MM")
-    parser.add_argument("-e", "--enddate", default=os.environ.get('enddate', None),required=True, metavar="YYYY-MM", help="End Year & Month in format YYYY-MM")
+    parser.add_argument("-k", "--IC_API_KEY", default=os.environ.get('IC_API_KEY', None), metavar="apikey", help="IBM Cloud API Key")
+    parser.add_argument("-s", "--startdate", default=os.environ.get('startdate', None), metavar="YYYY-MM", help="Start Year & Month in format YYYY-MM")
+    parser.add_argument("-e", "--enddate", default=os.environ.get('enddate', None), metavar="YYYY-MM", help="End Year & Month in format YYYY-MM")
     parser.add_argument("--COS_APIKEY", default=os.environ.get('COS_APIKEY', None), help="COS apikey to use for Object Storage.")
     parser.add_argument("--COS_ENDPOINT", default=os.environ.get('COS_ENDPOINT', None), help="COS endpoint to use for Object Storage.")
     parser.add_argument("--COS_INSTANCE_CRN", default=os.environ.get('COS_INSTANCE_CRN', None), help="COS Instance CRN to use for file upload.")
@@ -568,6 +568,13 @@ if __name__ == "__main__":
     parser.add_argument("--SL_PRIVATE", default=False, action=argparse.BooleanOptionalAction, help="Use IBM Cloud Classic Private API Endpoint")
     parser.add_argument("--PAAS_USE_USAGE_MONTH", default=False, action=argparse.BooleanOptionalAction, help="Use actual PaaS usage month for pivots instead of IBM Invoice Month which matches IBM invoices.")
     args = parser.parse_args()
+
+    if args.startdate == None or args.enddate == None:
+        logging.error("You must provide a start and end month and year in the format of YYYY-MM.")
+        quit()
+    if args.IC_API_KEY == None:
+        logging.error("You must provide an IBM Cloud ApiKey with billing View authority to run script.")
+        quit()
 
     IC_API_KEY = args.IC_API_KEY
 

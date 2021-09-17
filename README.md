@@ -33,15 +33,14 @@ pip install -r requirements.txt
 2.  Set environment variables which can be used.  IBM COS only required if file needs to be written to COS, otherwise file will be written locally.
 ![env_variables.png](env_variables.png)
 
-
 3.  Run Python script.
 ```bazaar
+export IC_API_KEY=<ibm cloud apikey>
 python invoiceAnalysis.py -s 2021-01 -e 2021-06
 ```
 
 ```bazaar
-usage: invoiceAnalysis.py [-h] -k apikey -s YYYY-MM -e YYYY-MM [--COS_APIKEY COS_APIKEY] [--COS_ENDPOINT COS_ENDPOINT] [--COS_INSTANCE_CRN COS_INSTANCE_CRN] [--COS_BUCKET COS_BUCKET] [--output OUTPUT] [--SL_PRIVATE | --no-SL_PRIVATE] [--PAAS_USE_USAGE_MONTH | --no-PAAS_USE_USAGE_MONTH]
-
+usage: invoiceAnalysis.py [-h] [-k apikey] [-s YYYY-MM] [-e YYYY-MM] [--COS_APIKEY COS_APIKEY] [--COS_ENDPOINT COS_ENDPOINT] [--COS_INSTANCE_CRN COS_INSTANCE_CRN] [--COS_BUCKET COS_BUCKET] [--output OUTPUT] [--SL_PRIVATE | --no-SL_PRIVATE] [--PAAS_USE_USAGE_MONTH | --no-PAAS_USE_USAGE_MONTH]
 
 Export usage detail by invoice month to an Excel file for all IBM Cloud Classic invoices and PaaS Consumption.
 
