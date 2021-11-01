@@ -10,9 +10,9 @@ logging.json | LOGGER config used by script
 Excel worksheet for review.  Each tab has a breakdown based on:
 
    - ***Detail*** tab has every invoice item for analyzed invoices represented as one row each.  All invoice types are included, including CREDIT invoices.  This data is summarized on the following tabs.
-   - ***InvoiceMap*** tab has a mapping of each portal invoice, portal invoice date, invoice type grouped by the IBM monthly invoice they are billed on.
+   - ***TopSheet-YYYY-MM*** tab(s) have a mapping of each portal invoice, to the IBM monthly CFTS invoice they are billed on.
    - ***InvoiceSummary*** tab is a pivot table of all the charges by product category & months of analyzed invoices. It also breaks out oneTime amounts vs Recurring invoices.
-   - ***CategorySummary*** tab is another pivot of all recurring charges broken down by Category, sub category (for example specific VSI sizes or Bare metal server types)
+   - ***CategorySummary*** tab is pivot of all recurring charges broken down by Category, sub category (for example specific VSI sizes or Bare metal server types)
    - The following Excel tabs will exist if there are servers of these types of resources on the analyzed invoices
      - ***HrlyVirtualServerPivot*** tab is a pivot of just Hourly Classic VSI's
      - ***MnthlyVirtualServerPivot*** tab is a pivot of just monthly Classic VSI's
@@ -65,8 +65,7 @@ optional arguments:
   --output OUTPUT       Filename Excel output file. (including extension of .xlsx)
   --SL_PRIVATE, --no-SL_PRIVATE
                         Use IBM Cloud Classic Private API Endpoint (default: False)
-  --PAAS_USE_USAGE_MONTH, --no-PAAS_USE_USAGE_MONTH
-                        Use actual PaaS usage month for pivots instead of IBM Invoice Month which matches IBM invoices. (default: False)
+
 
 
 

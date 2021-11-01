@@ -40,13 +40,12 @@
 #                         Use IBM Cloud Classic Private API Endpoint (default: False)
 
 __author__ = 'jonhall'
-
-import SoftLayer, argparse, os, logging, logging.config, json
-from datetime import datetime
-from dateutil.relativedelta import relativedelta
+import SoftLayer, os, logging, logging.config, json, calendar, uuid, os.path, argparse
 import pandas as pd
 import numpy as np
-from logdna import LogDNAHandler
+from datetime import datetime
+from calendar import monthrange
+from dateutil.relativedelta import relativedelta
 import ibm_boto3
 from ibm_botocore.client import Config, ClientError
 from ibm_platform_services import IamIdentityV1, UsageReportsV4
@@ -54,7 +53,6 @@ from ibm_cloud_sdk_core import ApiException
 from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
 
 def setup_logging(default_path='logging.json', default_level=logging.info, env_key='LOG_CFG'):
-
     path = default_path
     value = os.getenv(env_key, None)
     if value:
@@ -62,9 +60,9 @@ def setup_logging(default_path='logging.json', default_level=logging.info, env_k
     if os.path.exists(path):
         with open(path, 'rt') as f:
             config = json.load(f)
-        if "handlers" in config:
-            if "logdna" in config["handlers"]:
-                config["handlers"]["logdna"]["key"] = os.getenv("logdna_ingest_key")
+        #if "handlers" in config:
+            #if "logdna" in config["handlers"]:
+            #    config["handlers"]["logdna"]["key"] = os.getenv("logdna_ingest_key")
         logging.config.dictConfig(config)
     else:
         logging.basicConfig(level=default_level)
@@ -75,6 +73,14 @@ def getDescription(categoryCode, detail):
             if item['categoryCode'] == categoryCode:
                 return item['product']['description'].strip()
     return ""
+
+def getStorageServiceUsage(categoryCode, detail):
+    for item in detail:
+        if 'categoryCode' in item:
+            if item['categoryCode'] == categoryCode:
+                return item['description'].strip()
+    return ""
+
 
 def getSLIClinvoicedate(invoiceDate):
     # Determine SLIC  Invoice (20th prev month - 19th of month) from portal invoice make current month SLIC invoice.
@@ -131,20 +137,15 @@ def getInvoiceList(startdate, enddate):
         quit()
     return invoiceList
 
-def getInvoiceDetail(startdate, enddate):
+def getInvoiceDetail(IC_API_KEY, SL_ENDPOINT, startdate, enddate):
     #
     # GET InvoiceDetail
     #
-    global IC_API_KEY, client, SL_ENDPOINT
-
-    # Create Classic infra API client
-    client = SoftLayer.Client(username="apikey", api_key=IC_API_KEY, endpoint_url=SL_ENDPOINT)
-
-    # get list of invoices between start date and enddate
-    invoiceList = getInvoiceList(startdate, enddate)
-
+    global client
     # Create dataframe to work with for classic infrastructure invoices
     df = pd.DataFrame(columns=['Portal_Invoice_Date',
+                               'Service_Date_Start',
+                               'Service_Date_End',
                                'IBM_Invoice_Month',
                                'Portal_Invoice_Number',
                                'Type',
@@ -159,9 +160,20 @@ def getInvoiceDetail(startdate, enddate):
                                'Hours',
                                'HourlyRate',
                                'totalRecurringCharge',
+                               'NewEstimatedMonthly',
                                'totalOneTimeAmount',
                                'InvoiceTotal',
-                               'InvoiceRecurring'])
+                               'InvoiceRecurring',
+                               'Recurring_Description'])
+
+
+    # Create Classic infra API client
+    client = SoftLayer.Client(username="apikey", api_key=IC_API_KEY, endpoint_url=SL_ENDPOINT)
+
+    # get list of invoices between start date and enddate
+    invoiceList = getInvoiceList(startdate, enddate)
+    if invoiceList == None:
+        return invoiceList
 
     for invoice in invoiceList:
         if float(invoice['invoiceTotalAmount']) == 0:
@@ -176,6 +188,16 @@ def getInvoiceDetail(startdate, enddate):
 
         invoiceTotalRecurringAmount = float(invoice['invoiceTotalRecurringAmount'])
         invoiceType = invoice['typeCode']
+        recurringDesc = ""
+        if invoiceType == "NEW" or invoiceType:
+            serviceDateStart = invoiceDate
+            # get last day of month
+            serviceDateEnd= serviceDateStart.replace(day=calendar.monthrange(serviceDateStart.year,serviceDateStart.month)[1])
+
+        if invoiceType == "CREDIT" or invoiceType == "ONE-TIME-CHARGE":
+            serviceDateStart = invoiceDate
+            serviceDateEnd = invoiceDate
+
         totalItems = invoice['invoiceTopLevelItemCount']
 
         # PRINT INVOICE SUMMARY LINE
@@ -214,42 +236,93 @@ def getInvoiceDetail(startdate, enddate):
                     hostName = ""
 
                 recurringFee = float(item['totalRecurringAmount'])
+                NewEstimatedMonthly = 0
 
                 # If Hourly calculate hourly rate and total hours
                 if item["hourlyFlag"]:
-                    if float(item["hourlyRecurringFee"]) > 0:
-
-                        hourlyRecurringFee = float(item['hourlyRecurringFee']) + sum(
-                            float(child['hourlyRecurringFee']) for child in item["children"])
-                        hours = round(float(recurringFee) / hourlyRecurringFee)
-                    else:
-                        hourlyRecurringFee = 0
-                        hours = 0
-                # Not an hourly billing item
+                    # if hourly charges are previous month usage
+                    serviceDateStart = invoiceDate - relativedelta(months=1)
+                    serviceDateEnd = serviceDateStart.replace(day=calendar.monthrange(serviceDateStart.year, serviceDateStart.month)[1])
+                    recurringDesc = "IaaS Usage"
+                    hourlyRecurringFee = 0
+                    hours = 0
+                    if "hourlyRecurringFee" in item:
+                        if float(item["hourlyRecurringFee"]) > 0:
+                            hourlyRecurringFee = float(item['hourlyRecurringFee'])
+                            for child in item["children"]:
+                                if "hourlyRecurringFee" in child:
+                                    hourlyRecurringFee = hourlyRecurringFee + float(child['hourlyRecurringFee'])
+                            hours = round(float(recurringFee) / hourlyRecurringFee)            # Not an hourly billing item
                 else:
+                    if categoryName.find("Platform Service Plan") != -1:
+                        # Non Hourly PaaS Usage from actual usage two months prior
+                        serviceDateStart = invoiceDate - relativedelta(months=2)
+                        serviceDateEnd = serviceDateStart.replace(day=calendar.monthrange(serviceDateStart.year, serviceDateStart.month)[1])
+                        recurringDesc = "Platform Service Usage"
+                    else:
+                        if invoiceType == "RECURRING":
+                            serviceDateStart = invoiceDate
+                            serviceDateEnd = serviceDateStart.replace(day=calendar.monthrange(serviceDateStart.year, serviceDateStart.month)[1])
+                            recurringDesc = "IaaS Monthly"
                     hourlyRecurringFee = 0
                     hours = 0
 
                 # Special handling for storage
-                if category == "storage_service_enterprise" or category == "performance_storage_iscsi":
-
-                    if category == "storage_service_enterprise":
-                        iops = getDescription("storage_tier_level", item["children"])
-                        storage = getDescription("performance_storage_space", item["children"])
-                        snapshot = getDescription("storage_snapshot_space", item["children"])
-                        if snapshot == "":
-                            description = storage + " " + iops + " "
-                        else:
-                            description = storage+" " + iops + " with " + snapshot
+                if category == "storage_service_enterprise":
+                    iops = getDescription("storage_tier_level", item["children"])
+                    storage = getDescription("performance_storage_space", item["children"])
+                    snapshot = getDescription("storage_snapshot_space", item["children"])
+                    if snapshot == "":
+                        description = storage + " " + iops + " "
                     else:
-                        iops = getDescription("performance_storage_iops", item["children"])
-                        storage = getDescription("performance_storage_space", item["children"])
-                        description = storage + " " + iops
+                        description = storage+" " + iops + " with " + snapshot
+                elif category == "performance_storage_iops":
+                    iops = getDescription("performance_storage_iops", item["children"])
+                    storage = getDescription("performance_storage_space", item["children"])
+                    description = storage + " " + iops
+                elif category == "storage_as_a_service":
+                    if item["hourlyFlag"]:
+                        model = "Hourly"
+                        for child in item["children"]:
+                            if "hourlyRecurringFee" in child:
+                                hourlyRecurringFee = hourlyRecurringFee + float(child['hourlyRecurringFee'])
+                        if hourlyRecurringFee>0:
+                            hours = round(float(recurringFee) / hourlyRecurringFee)
+                        else:
+                            hours = 0
+                    else:
+                        model = "Monthly"
+                    space = getStorageServiceUsage('performance_storage_space', item["children"])
+                    tier = getDescription("storage_tier_level", item["children"])
+                    snapshot = getDescription("storage_snapshot_space", item["children"])
+                    if space == "" or tier == "":
+                        description = model + " File Storage"
+                    else:
+                        if snapshot == "":
+                            description = model + " File Storage "+ space + " at " + tier
+                        else:
+                            snapshotspace = getStorageServiceUsage('storage_snapshot_space', item["children"])
+                            description = model + " File Storage " + space + " at " + tier + " with " + snapshotspace
+                elif category == "guest_storage":
+                        imagestorage = getStorageServiceUsage("guest_storage_usage", item["children"])
+                        if imagestorage == "":
+                            description = description.replace('\n', " ")
+                        else:
+                            description = imagestorage
                 else:
                     description = description.replace('\n', " ")
 
+
+                if invoiceType == "NEW":
+                    # calculate non pro-rated amount for use in forecast
+                    daysInMonth = monthrange(invoiceDate.year, invoiceDate.month)[1]
+                    daysLeft = daysInMonth - invoiceDate.day + 1
+                    dailyAmount = recurringFee / daysLeft
+                    NewEstimatedMonthly = dailyAmount * daysInMonth
                 # Append record to dataframe
                 row = {'Portal_Invoice_Date': invoiceDate.strftime("%Y-%m-%d"),
+                       'Service_Date_Start': serviceDateStart.strftime("%Y-%m-%d"),
+                       'Service_Date_End': serviceDateEnd.strftime("%Y-%m-%d"),
                        'IBM_Invoice_Month': SLICInvoiceDate,
                        'Portal_Invoice_Number': invoiceID,
                        'BillingItemId': billingItemId,
@@ -261,20 +334,21 @@ def getInvoiceDetail(startdate, enddate):
                        'Hourly': item["hourlyFlag"],
                        'Usage': item["usageChargeFlag"],
                        'Hours': hours,
-                       'HourlyRate': round(hourlyRecurringFee,3),
+                       'HourlyRate': round(hourlyRecurringFee,5),
                        'totalRecurringCharge': round(recurringFee,3),
                        'totalOneTimeAmount': float(totalOneTimeAmount),
+                       'NewEstimatedMonthly': float(NewEstimatedMonthly),
                        'InvoiceTotal': float(invoiceTotalAmount),
                        'InvoiceRecurring': float(invoiceTotalRecurringAmount),
-                       'Type': invoiceType
+                       'Type': invoiceType,
+                       'Recurring_Description': recurringDesc
                         }
 
                 df = df.append(row, ignore_index=True)
     return df
 
-def createReport(filename):
+def createReport(filename, classicUsage, paasUsage):
     # Write dataframe to excel
-    global classicUsage, paasUsage, useMonth
     logging.info("Creating Pivots File.")
     writer = pd.ExcelWriter(filename, engine='xlsxwriter')
     workbook = writer.book
@@ -284,27 +358,36 @@ def createReport(filename):
     #
     classicUsage.to_excel(writer, 'Detail')
     usdollar = workbook.add_format({'num_format': '$#,##0.00'})
-
     worksheet = writer.sheets['Detail']
-    worksheet.set_column('P:S', 18, usdollar)
+    worksheet.set_column('Q:V', 18, usdollar)
+    totalrows,totalcols=classicUsage.shape
+    worksheet.autofilter(0,0,totalrows,totalcols)
 
     #
-    # Map Portal Invoices to SLIC Invoices
+    # Map Portal Invoices to SLIC Invoices / Create Top Sheet per SLIC month
     #
 
     classicUsage["totalAmount"] = classicUsage["totalOneTimeAmount"] + classicUsage["totalRecurringCharge"]
-    SLICInvoice = pd.pivot_table(classicUsage,
-                                 index=["IBM_Invoice_Month", "Portal_Invoice_Date", "Portal_Invoice_Number", "Type"],
-                                 values=["totalAmount"],
-                                 aggfunc={'totalAmount': np.sum}, fill_value=0)
-    out = pd.concat([d.append(d.sum().rename((k, '-', '-', 'Total'))) for k, d in SLICInvoice.groupby('IBM_Invoice_Month')])
 
-    out.to_excel(writer, 'InvoiceMap')
-    worksheet = writer.sheets['InvoiceMap']
-    format1 = workbook.add_format({'num_format': '$#,##0.00'})
-    format2 = workbook.add_format({'align': 'left'})
-    worksheet.set_column("A:D", 20, format2)
-    worksheet.set_column("E:ZZ", 18, format1)
+    months = classicUsage.IBM_Invoice_Month.unique()
+    for i in months:
+        logging.info("Creating top sheet for %s." % (i))
+        ibminvoicemonth = classicUsage.query('IBM_Invoice_Month == @i')
+        SLICInvoice = pd.pivot_table(ibminvoicemonth,
+                                     index=["Type", "Portal_Invoice_Number", "Service_Date_Start", "Service_Date_End", "Recurring_Description"],
+                                     values=["totalAmount"],
+                                     aggfunc={'totalAmount': np.sum}, fill_value=0).sort_values(by=['Service_Date_Start'])
+
+        out = pd.concat([d.append(d.sum().rename((k, ' ', ' ', 'Subtotal', ' '))) for k, d in SLICInvoice.groupby('Type')]).append(SLICInvoice.sum().rename((' ', ' ', ' ', 'Pay this Amount', '')))
+        out.rename(columns={"Type": "Invoice Type", "Portal_Invoice_Number": "Invoice",
+                            "Service_Date_Start": "Service Start", "Service_Date_End": "Service End",
+                             "Recurring_Description": "Description", "totalAmount": "Amount"}, inplace=True)
+        out.to_excel(writer, 'TopSheet-{}'.format(i))
+        worksheet = writer.sheets['TopSheet-{}'.format(i)]
+        format1 = workbook.add_format({'num_format': '$#,##0.00'})
+        format2 = workbook.add_format({'align': 'left'})
+        worksheet.set_column("A:E", 20, format2)
+        worksheet.set_column("F:F", 18, format1)
 
     #
     # Build a pivot table by Invoice Type
@@ -326,7 +409,7 @@ def createReport(filename):
     #
     # Build a pivot table by Category with totalRecurringCharges
 
-    categorySummary = pd.pivot_table(classicUsage, index=["Category", "Description"],
+    categorySummary = pd.pivot_table(classicUsage, index=["Type", "Category", "Description"],
                                      values=["totalAmount"],
                                      columns=['IBM_Invoice_Month'],
                                      aggfunc={'totalAmount': np.sum}, margins=True, margins_name="Total", fill_value=0)
@@ -395,9 +478,9 @@ def createReport(filename):
         worksheet.set_column("A:A", 40, format2)
         worksheet.set_column("B:B", 40, format2)
 
-    # IF PaaS credential included add usage reports
+  # IF PaaS credential included add usage reports
     if len(paasUsage) >0:
-        paasUsage.to_excel(writer, 'PaaS_Usage')
+        paasUsage.to_excel(writer, "PaaS_Usage")
         worksheet = writer.sheets['PaaS_Usage']
         format1 = workbook.add_format({'num_format': '$#,##0.00'})
         format2 = workbook.add_format({'align': 'left'})
@@ -409,7 +492,7 @@ def createReport(filename):
 
         paasSummary = pd.pivot_table(paasUsage, index=["resource_name"],
                                         values=["charges"],
-                                        columns=[useMonth],
+                                        columns=["invoiceMonth"],
                                         aggfunc={'charges': np.sum, }, margins=True, margins_name="Total",
                                         fill_value=0)
         paasSummary.to_excel(writer, 'PaaS_Summary')
@@ -421,7 +504,7 @@ def createReport(filename):
 
         paasSummaryPlan = pd.pivot_table(paasUsage, index=["resource_name", "plan_name"],
                                      values=["charges"],
-                                     columns=[useMonth],
+                                     columns=["invoiceMonth"],
                                      aggfunc={'charges': np.sum, }, margins=True, margins_name="Total",
                                      fill_value=0)
         paasSummaryPlan.to_excel(writer, 'PaaS_Plan_Summary')
@@ -488,23 +571,10 @@ def getAccountId(IC_API_KEY):
 
     return api_key["account_id"]
 
-def accountUsage(startdate, enddate):
+def accountUsage(IC_API_KEY, IC_ACCOUNT_ID, startdate, enddate):
     ##########################################################
     ## Get Usage for Account matching recuring invoice periods
     ##########################################################
-    global IC_ACCOUNT_ID, IC_API_KEY
-
-
-    try:
-        authenticator = IAMAuthenticator(IC_API_KEY)
-    except ApiException as e:
-        logging.error("API exception {}.".format(str(e)))
-        quit()
-    try:
-        usage_reports_service = UsageReportsV4(authenticator=authenticator)
-    except ApiException as e:
-        logging.error("API exception {}.".format(str(e)))
-        quit()
 
     accountUsage = pd.DataFrame(columns=['usageMonth',
                                'invoiceMonth',
@@ -516,6 +586,19 @@ def accountUsage(startdate, enddate):
                                'quantity',
                                'charges']
                                 )
+
+    try:
+        authenticator = IAMAuthenticator(IC_API_KEY)
+    except ApiException as e:
+        logging.error("API exception {}.".format(str(e)))
+        error = ("API exception {}.".format(str(e)))
+        return accountUsage, error
+    try:
+        usage_reports_service = UsageReportsV4(authenticator=authenticator)
+    except ApiException as e:
+        logging.error("API exception {}.".format(str(e)))
+        error = ("API exception {}.".format(str(e)))
+        return accountUsage, error
 
     # PaaS consumption is delayed by one recurring invoice (ie April usage on June 1 recurring invoice)
     paasStart = datetime.strptime(startdate, '%m/%d/%Y') - relativedelta(months=1)
@@ -566,11 +649,10 @@ if __name__ == "__main__":
     parser.add_argument("--COS_BUCKET", default=os.environ.get('COS_BUCKET', None), help="COS Bucket name to use for file upload.")
     parser.add_argument("--output", default=os.environ.get('output', 'invoice-analysis.xlsx'), help="Filename Excel output file. (including extension of .xlsx)")
     parser.add_argument("--SL_PRIVATE", default=False, action=argparse.BooleanOptionalAction, help="Use IBM Cloud Classic Private API Endpoint")
-    parser.add_argument("--PAAS_USE_USAGE_MONTH", default=False, action=argparse.BooleanOptionalAction, help="Use actual PaaS usage month for pivots instead of IBM Invoice Month which matches IBM invoices.")
     args = parser.parse_args()
 
     if args.startdate == None or args.enddate == None:
-        logging.error("You must provide a start and end month and year in the format of YYYY-MM.")
+        logging.error("You must provide a start and end month in the format of YYYY-MM.")
         quit()
     if args.IC_API_KEY == None:
         logging.error("You must provide an IBM Cloud ApiKey with billing View authority to run script.")
@@ -588,19 +670,15 @@ if __name__ == "__main__":
         SL_ENDPOINT = "https://api.softlayer.com/xmlrpc/v3.1"
 
     #  Retrieve Invoices from classic
-    classicUsage = getInvoiceDetail(startdate, enddate)
+    classicUsage = getInvoiceDetail(IC_API_KEY, SL_ENDPOINT, startdate, enddate)
 
     # Retrieve Usage from IBM Cloud
     IC_ACCOUNT_ID = getAccountId(IC_API_KEY)
-    if args.PAAS_USE_USAGE_MONTH:
-        useMonth = "usageMonth"
-    else:
-        useMonth = "invoiceMonth"
 
-    paasUsage = accountUsage(startdate, enddate)
+    paasUsage = accountUsage(IC_API_KEY, IC_ACCOUNT_ID, startdate, enddate)
 
     # Build Exel Report
-    createReport(args.output)
+    createReport(args.output, classicUsage, paasUsage)
 
     # upload created file to COS if COS credentials provided
     if args.COS_APIKEY != None:
