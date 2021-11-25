@@ -96,6 +96,7 @@ def getInvoiceList(startdate, enddate):
     # GET LIST OF PORTAL INVOICES BETWEEN DATES USING CENTRAL (DALLAS) TIME
     dallas=tz.gettz('US/Central')
     logging.info("Looking up invoices from {} to {}.".format(startdate.strftime("%m/%d/%Y %H:%M:%S%z"), enddate.strftime("%m/%d/%Y %H:%M:%S%z")))
+    # filter invoices based on local dallas time that correspond to CFTS UTC cutoff
     try:
         invoiceList = client['Account'].getInvoices(mask='id,createDate,typeCode,invoiceTotalAmount,invoiceTotalRecurringAmount,invoiceTopLevelItemCount', filter={
                 'invoices': {
@@ -161,7 +162,7 @@ def getInvoiceDetail(IC_API_KEY, SL_ENDPOINT, startdate, enddate):
         # To align to CFTS billing convert to UTC time.
         invoiceDate = datetime.strptime(invoice['createDate'], "%Y-%m-%dT%H:%M:%S%z").astimezone(pytz.utc)
         invoiceTotalAmount = float(invoice['invoiceTotalAmount'])
-        SLICInvoiceDate = getCFTSlinvoicedate(invoiceDate)
+        CFTSInvoiceDate = getCFTSlinvoicedate(invoiceDate)
 
         invoiceTotalRecurringAmount = float(invoice['invoiceTotalRecurringAmount'])
         invoiceType = invoice['typeCode']
@@ -301,7 +302,7 @@ def getInvoiceDetail(IC_API_KEY, SL_ENDPOINT, startdate, enddate):
                        'Portal_Invoice_Time': invoiceDate.strftime("%H:%M:%S%z"),
                        'Service_Date_Start': serviceDateStart.strftime("%Y-%m-%d"),
                        'Service_Date_End': serviceDateEnd.strftime("%Y-%m-%d"),
-                       'IBM_Invoice_Month': SLICInvoiceDate,
+                       'IBM_Invoice_Month': CFTSInvoiceDate,
                        'Portal_Invoice_Number': invoiceID,
                        'BillingItemId': billingItemId,
                        'hostName': hostName,
