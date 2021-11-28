@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# invoiceAnalysis.py - Export usage detail by invoice month to an Excel file for all IBM Cloud Classic invoices and PaaS Consumption.
+# invoiceAnalysis.py - Export usage detail by CFTS invoice month to an Excel file for all IBM Cloud Classic invoices and PaaS Consumption.
 # Author: Jon Hall
 # Copyright (c) 2021
 #
@@ -12,10 +12,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
-#
-#   Get RECURRING, NEW, and Onetime Invoices with a invoice amount > 0
-#   Return toplevel items and export to excel spreadsheet
 #
 # usage: invoiceAnalysis.py [-h] -k apikey -s YYYY-MM -e YYYY-MM [--COS_APIKEY COS_APIKEY] [--COS_ENDPOINT COS_ENDPOINT] [--COS_INSTANCE_CRN COS_INSTANCE_CRN] [--COS_BUCKET COS_BUCKET] [--output OUTPUT] [--SL_PRIVATE | --no-SL_PRIVATE]
 # Export usage detail by invoice month to an Excel file for all IBM Cloud Classic invoices and PaaS Consumption.
