@@ -1,4 +1,4 @@
-*IBM Cloud Classic Infrastructure Billing Script**
+**IBM Cloud Classic Infrastructure Billing Report**
 
 Script | Description
 ------ | -----------
@@ -69,8 +69,7 @@ optional arguments:
 ```
 
 
-
-# IBM Cloud Classic Infrastructure Billing API Scripts as a Code Engine Job
+**IBM Cloud Classic Infrastructure Billing Report as a Code Engine Job**
 
 Script | Description
 ------ | -----------
@@ -115,6 +114,6 @@ Dockerfile | Docker Build file used by code engine to build container.
         -  ***enddate*** = end year & month invoice analysis in YYYY-MM format
         -  ***output*** = report filename (including extension of XLSX to be written to COS bucket)
 4. to Run report click ***Submit job***
-5, Logging for job can be found from job screen, by clicking Actions, Logging
-</br>
+5. Logging for job can be found from job screen, by clicking Actions, Logging
+
 
