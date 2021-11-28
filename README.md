@@ -1,4 +1,4 @@
-**IBM Cloud Classic Infrastructure Billing Report**
+#IBM Cloud Classic Infrastructure Billing Report
 
 Script | Description
 ------ | -----------
@@ -68,8 +68,7 @@ optional arguments:
 
 ```
 
-
-**IBM Cloud Classic Infrastructure Billing Report as a Code Engine Job**
+#IBM Cloud Classic Infrastructure Billing Report as a Code Engine Job
 
 Script | Description
 ------ | -----------
