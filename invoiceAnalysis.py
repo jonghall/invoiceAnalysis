@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# invoiceAnalysis.py - Export usage detail by invoice month to an Excel file for all IBM Cloud Classic invoices and PaaS Consumption.
+# invoiceAnalysis.py - Export usage detail by CFTS invoice month to an Excel file for all IBM Cloud Classic invoices and PaaS Consumption.
 # Author: Jon Hall
 # Copyright (c) 2021
 #
@@ -12,10 +12,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
-#
-#   Get RECURRING, NEW, and Onetime Invoices with a invoice amount > 0
-#   Return toplevel items and export to excel spreadsheet
 #
 # usage: invoiceAnalysis.py [-h] -k apikey -s YYYY-MM -e YYYY-MM [--COS_APIKEY COS_APIKEY] [--COS_ENDPOINT COS_ENDPOINT] [--COS_INSTANCE_CRN COS_INSTANCE_CRN] [--COS_BUCKET COS_BUCKET] [--output OUTPUT] [--SL_PRIVATE | --no-SL_PRIVATE]
 # Export usage detail by invoice month to an Excel file for all IBM Cloud Classic invoices and PaaS Consumption.
@@ -355,7 +351,7 @@ def createReport(filename, classicUsage, paasUsage):
         SLICInvoice = pd.pivot_table(ibminvoicemonth,
                                      index=["Type", "Portal_Invoice_Number", "Service_Date_Start", "Service_Date_End", "Recurring_Description"],
                                      values=["totalAmount"],
-                                     aggfunc={'totalAmount': np.sum}, fill_value=0).sort_values(by=['Service_Date_Start'])
+                                     aggfunc={'totalAmount': np.sum}, fill_value=0).sort_values(by=['Service_Date_Start', "Portal_Invoice_Number"])
 
         out = pd.concat([d.append(d.sum().rename((k, ' ', ' ', 'Subtotal', ' '))) for k, d in SLICInvoice.groupby('Type')]).append(SLICInvoice.sum().rename((' ', ' ', ' ', 'Pay this Amount', '')))
         out.rename(columns={"Type": "Invoice Type", "Portal_Invoice_Number": "Invoice",
