@@ -76,7 +76,7 @@ def getStorageServiceUsage(categoryCode, detail):
     return ""
 
 
-def getCFTSlinvoicedate(invoiceDate):
+def getCFTSInvoiceDate(invoiceDate):
     # Determine CFTS Invoice Month (20th of prev month - 19th of current month) are on current month CFTS invoice.
     if invoiceDate.day > 19:
         invoiceDate = invoiceDate + relativedelta(months=1)
@@ -158,7 +158,7 @@ def getInvoiceDetail(IC_API_KEY, SL_ENDPOINT, startdate, enddate):
         # To align to CFTS billing convert to UTC time.
         invoiceDate = datetime.strptime(invoice['createDate'], "%Y-%m-%dT%H:%M:%S%z").astimezone(pytz.utc)
         invoiceTotalAmount = float(invoice['invoiceTotalAmount'])
-        CFTSInvoiceDate = getCFTSlinvoicedate(invoiceDate)
+        CFTSInvoiceDate = getCFTSInvoiceDate(invoiceDate)
 
         invoiceTotalRecurringAmount = float(invoice['invoiceTotalRecurringAmount'])
         invoiceType = invoice['typeCode']
