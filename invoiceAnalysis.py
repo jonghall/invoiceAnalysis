@@ -355,7 +355,7 @@ def createReport(filename, classicUsage, paasUsage):
         SLICInvoice = pd.pivot_table(ibminvoicemonth,
                                      index=["Type", "Portal_Invoice_Number", "Service_Date_Start", "Service_Date_End", "Recurring_Description"],
                                      values=["totalAmount"],
-                                     aggfunc={'totalAmount': np.sum}, fill_value=0).sort_values(by=['Service_Date_Start'])
+                                     aggfunc={'totalAmount': np.sum}, fill_value=0).sort_values(by=['Service_Date_Start', "Portal_Invoice_Number"])
 
         out = pd.concat([d.append(d.sum().rename((k, ' ', ' ', 'Subtotal', ' '))) for k, d in SLICInvoice.groupby('Type')]).append(SLICInvoice.sum().rename((' ', ' ', ' ', 'Pay this Amount', '')))
         out.rename(columns={"Type": "Invoice Type", "Portal_Invoice_Number": "Invoice",
