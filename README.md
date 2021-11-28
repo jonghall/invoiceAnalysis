@@ -7,11 +7,12 @@ requirements.txt | Package requirements
 logging.json | LOGGER config used by script
 Dockerfile | Docker Build file used by code engine to build container.
 
-*invoiceAnalysis.py* collects IBM Cloud Classic Infrastructure invoices between two months and consolidates billing data into an
-Excel worksheet for analysis.  Each tab has a breakdown based on:
+*invoiceAnalysis.py* collects IBM Cloud Classic Infrastructure NEW, RECURRING, and CREDIT invoices between months specified and the data is consolidated into an
+Excel worksheet for billing and usage analysis.  In addition to detailed data pivot tables are created in Excel tabs.   _Tabs will only be created if there are related resources on the collected invoices._
 
-   - ***Detail*** tab has every invoice item for analyzed invoices represented as one row each.  All invoice types are included, including CREDIT invoices.  The detail tab can be sorted or filtered based on analysis needs.  This data is summarized on the following tabs as pivot tables.
-   - ***TopSheet-YYYY-MM*** tab(s) have a mapping of each portal invoice, to the IBM monthly CFTS invoice they are billed on.
+*Excel Tab Explanation*
+   - ***Detail*** tab has every invoice item for analyzed invoices represented as one row each. For invoices with multiple items, each row represents an invoice item.  All invoice types are included, including CREDIT invoices.  The detail tab can be sorted or filtered.  
+   - ***TopSheet-YYYY-MM*** tab(s) have a mapping of each portal invoice, to the corresponding IBM CFTS invoice(s) they are billed on.
    - ***InvoiceSummary*** tab is a pivot table of all the charges by product category & months of analyzed invoices. It also breaks out oneTime amounts vs Recurring invoices.
    - ***CategorySummary*** tab is pivot of all recurring charges broken down by Category, sub category (for example specific VSI sizes or Bare metal server types)
    - ***HrlyVirtualServerPivot*** tab is a pivot of just Hourly Classic VSI's
@@ -22,10 +23,8 @@ Excel worksheet for analysis.  Each tab has a breakdown based on:
     - ***PaaS_Summary*** shows the invoice charges for each PaaS service consumed.  Note the columns represent invoice month, not usage month unless overridden by --PAAS_USE_USAGE_MONTH 
     - ***PaaS_Plan_Summary*** show the additional level of detail for the invoice charges for each PaaS service and plan consumed.  Note the columns represent invoice month, not usage month unless overridden by --PAAS_USE_USAGE_MONTH 
 
-   __Above tabs will only be created if there are related resources on the collected invoices__
 
-
-Instructions:
+Script Execution Instructions:
 
 1. Install required packages.  
 ````
