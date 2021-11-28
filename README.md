@@ -7,22 +7,22 @@ requirements.txt | Package requirements
 logging.json | LOGGER config used by script
 Dockerfile | Docker Build file used by code engine to build container.
 
-*invoiceAnalysis.py* analyzes IBM Cloud Classic Infrastructure invoices between two dates and consolidates billing data into an
-Excel worksheet for review.  Each tab has a breakdown based on:
+*invoiceAnalysis.py* collects IBM Cloud Classic Infrastructure invoices between two months and consolidates billing data into an
+Excel worksheet for analysis.  Each tab has a breakdown based on:
 
-   - ***Detail*** tab has every invoice item for analyzed invoices represented as one row each.  All invoice types are included, including CREDIT invoices.  This data is summarized on the following tabs.
+   - ***Detail*** tab has every invoice item for analyzed invoices represented as one row each.  All invoice types are included, including CREDIT invoices.  The detail tab can be sorted or filtered based on analysis needs.  This data is summarized on the following tabs as pivot tables.
    - ***TopSheet-YYYY-MM*** tab(s) have a mapping of each portal invoice, to the IBM monthly CFTS invoice they are billed on.
    - ***InvoiceSummary*** tab is a pivot table of all the charges by product category & months of analyzed invoices. It also breaks out oneTime amounts vs Recurring invoices.
    - ***CategorySummary*** tab is pivot of all recurring charges broken down by Category, sub category (for example specific VSI sizes or Bare metal server types)
-   - The following Excel tabs will exist if there are servers of these types of resources on the analyzed invoices
-     - ***HrlyVirtualServerPivot*** tab is a pivot of just Hourly Classic VSI's
-     - ***MnthlyVirtualServerPivot*** tab is a pivot of just monthly Classic VSI's
-     - ***HrlyBareMetalServerPivot*** tab is a pivot of Hourly Bare Metal Servers
-     - ***MnthlyBareMetalServerPivot*** tab is a pivot table of monthly Bare Metal Server
-   - The following Excel tabs will be created if there is PaaS usage during the period requested
-     - ***PaaS_Usage*** shows the complete list of invoice items showing the usageMonth, InvoiceMonth, ServiceName, and Plan Name with billable charges for each unit associated with the service. 
-     - ***PaaS_Summary*** shows the invoice charges for each PaaS service consumed.  Note the columns represent invoice month, not usage month unless overridden by --PAAS_USE_USAGE_MONTH 
-     - ***PaaS_Plan_Summary*** show the additional level of detail for the invoice charges for each PaaS service and plan consumed.  Note the columns represent invoice month, not usage month unless overridden by --PAAS_USE_USAGE_MONTH 
+   - ***HrlyVirtualServerPivot*** tab is a pivot of just Hourly Classic VSI's
+   - ***MnthlyVirtualServerPivot*** tab is a pivot of just monthly Classic VSI's
+   - ***HrlyBareMetalServerPivot*** tab is a pivot of Hourly Bare Metal Servers
+   - ***MnthlyBareMetalServerPivot*** tab is a pivot table of monthly Bare Metal Server
+   - ***PaaS_Usage*** shows the complete list of invoice items showing the usageMonth, InvoiceMonth, ServiceName, and Plan Name with billable charges for each unit associated with the service. 
+    - ***PaaS_Summary*** shows the invoice charges for each PaaS service consumed.  Note the columns represent invoice month, not usage month unless overridden by --PAAS_USE_USAGE_MONTH 
+    - ***PaaS_Plan_Summary*** show the additional level of detail for the invoice charges for each PaaS service and plan consumed.  Note the columns represent invoice month, not usage month unless overridden by --PAAS_USE_USAGE_MONTH 
+
+   __Above tabs will only be created if there are related resources on the collected invoices__
 
 
 Instructions:
