@@ -5,6 +5,7 @@ Script | Description
 invoiceAnalysis.py | Export usage detail by invoice month to an Excel file for all IBM Cloud Classic invoices and PaaS Consumption.
 requirements.txt | Package requirements
 logging.json | LOGGER config used by script
+Dockerfile | Docker Build file used by code engine to build container.
 
 *invoiceAnalysis.py* analyzes IBM Cloud Classic Infrastructure invoices between two dates and consolidates billing data into an
 Excel worksheet for review.  Each tab has a breakdown based on:
@@ -70,14 +71,7 @@ optional arguments:
 
 # IBM Cloud Classic Infrastructure Billing Report as a Code Engine Job
 
-Script | Description
------- | -----------
-invoiceAnalysis.py | Analyzes all invoices between two dates and creates excel reports.
-requirements.txt | Package requirements
-logging.json | LOGGER config used by script
-Dockerfile | Docker Build file used by code engine to build container.
-
-### Setting up IBM Code Engine and building container to run report
+## Setting up IBM Code Engine and building container to run report
 1. Create project, build job and job.
     1. Open the Code Engine console
     2. Select Start creating from Start from source code.
@@ -93,7 +87,6 @@ Dockerfile | Docker Build file used by code engine to build container.
     12. Click Done.
     13. Click Create.
 2. Create configmaps and secrets.
-    ![env_variables.png](env_variables.png)
     1. From project list, choose newly created project.
     2. Select secrets and configmaps
     3. click create, choose config map, and give it a name. Add the following key value pairs
@@ -114,5 +107,3 @@ Dockerfile | Docker Build file used by code engine to build container.
         -  ***output*** = report filename (including extension of XLSX to be written to COS bucket)
 4. to Run report click ***Submit job***
 5. Logging for job can be found from job screen, by clicking Actions, Logging
-
-
