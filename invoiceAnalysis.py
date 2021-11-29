@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# invoiceAnalysis.py - Export usage detail by CFTS invoice month to an Excel file for all IBM Cloud Classic invoices and PaaS Consumption.
 # Author: Jon Hall
 # Copyright (c) 2021
 #
@@ -13,28 +12,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# usage: invoiceAnalysis.py [-h] -k apikey -s YYYY-MM -e YYYY-MM [--COS_APIKEY COS_APIKEY] [--COS_ENDPOINT COS_ENDPOINT] [--COS_INSTANCE_CRN COS_INSTANCE_CRN] [--COS_BUCKET COS_BUCKET] [--output OUTPUT] [--SL_PRIVATE | --no-SL_PRIVATE]
-# Export usage detail by invoice month to an Excel file for all IBM Cloud Classic invoices and PaaS Consumption.
-# optional arguments:
-#   -h, --help            show this help message and exit
-#   -k apikey, --IC_API_KEY apikey
-#                         IBM Cloud API Key
-#   -s YYYY-MM, --startdate YYYY-MM
-#                        Start Year & Month in format YYYY-MM
-#   -e YYYY-MM, --enddate YYYY-MM
-#                         End Year & Month in format YYYY-MM
-#   --COS_APIKEY COS_APIKEY
-#                         COS apikey to use for Object Storage.
-#   --COS_ENDPOINT COS_ENDPOINT
-#                         COS endpoint to use for Object Storage.
-#   --COS_INSTANCE_CRN COS_INSTANCE_CRN
-#                         COS Instance CRN to use for file upload.
-#   --COS_BUCKET COS_BUCKET
-#                         COS Bucket name to use for file upload.
-#   --output OUTPUT       Filename Excel output file. (including extension of .xlsx)
-#   --SL_PRIVATE, --no-SL_PRIVATE
-#                         Use IBM Cloud Classic Private API Endpoint (default: False)
+"""
+usage: invoiceAnalysis.py [-h] [-k apikey] [-s YYYY-MM] [-e YYYY-MM] [--COS_APIKEY COS_APIKEY] [--COS_ENDPOINT COS_ENDPOINT] [--COS_INSTANCE_CRN COS_INSTANCE_CRN] [--COS_BUCKET COS_BUCKET] [--output OUTPUT] [--SL_PRIVATE | --no-SL_PRIVATE]
+Export usage detail by invoice month to an Excel file for all IBM Cloud Classic invoices and PaaS Consumption.
 
+optional arguments:
+  -h, --help            show this help message and exit
+  -k apikey, --IC_API_KEY apikey
+                        IBM Cloud API Key
+  -s YYYY-MM, --startdate YYYY-MM
+                        Start Year & Month in format YYYY-MM
+  -e YYYY-MM, --enddate YYYY-MM
+                        End Year & Month in format YYYY-MM
+  --COS_APIKEY COS_APIKEY
+                        COS apikey to use for Object Storage.
+  --COS_ENDPOINT COS_ENDPOINT
+                        COS endpoint to use for Object Storage.
+  --COS_INSTANCE_CRN COS_INSTANCE_CRN
+                        COS Instance CRN to use for file upload.
+  --COS_BUCKET COS_BUCKET
+                        COS Bucket name to use for file upload.
+  --output OUTPUT       Filename Excel output file. (including extension of .xlsx)
+  --SL_PRIVATE, --no-SL_PRIVATE
+                        Use IBM Cloud Classic Private API Endpoint (default: False)
+"""
 __author__ = 'jonhall'
 import SoftLayer, os, logging, logging.config, json, calendar, uuid, os.path, argparse, pytz
 import pandas as pd
@@ -50,6 +51,7 @@ from ibm_cloud_sdk_core import ApiException
 from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
 
 def setup_logging(default_path='logging.json', default_level=logging.info, env_key='LOG_CFG'):
+    # read logging.json for log parameters to be ued by script
     path = default_path
     value = os.getenv(env_key, None)
     if value:
@@ -62,6 +64,7 @@ def setup_logging(default_path='logging.json', default_level=logging.info, env_k
         logging.basicConfig(level=default_level)
 
 def getDescription(categoryCode, detail):
+    # retrieve additional description detail for child records
     for item in detail:
         if 'categoryCode' in item:
             if item['categoryCode'] == categoryCode:
@@ -69,6 +72,7 @@ def getDescription(categoryCode, detail):
     return ""
 
 def getStorageServiceUsage(categoryCode, detail):
+    # retrieve storage details for description text
     for item in detail:
         if 'categoryCode' in item:
             if item['categoryCode'] == categoryCode:
@@ -111,9 +115,7 @@ def getInvoiceList(startdate, enddate):
     return invoiceList
 
 def getInvoiceDetail(IC_API_KEY, SL_ENDPOINT, startdate, enddate):
-    #
     # GET InvoiceDetail
-    #
     global client
     # Create dataframe to work with for classic infrastructure invoices
     df = pd.DataFrame(columns=['Portal_Invoice_Date',
@@ -144,7 +146,7 @@ def getInvoiceDetail(IC_API_KEY, SL_ENDPOINT, startdate, enddate):
     # Create Classic infra API client
     client = SoftLayer.Client(username="apikey", api_key=IC_API_KEY, endpoint_url=SL_ENDPOINT)
 
-    # get list of invoices between start date and enddate
+    # get list of invoices between start month and endmonth
     invoiceList = getInvoiceList(startdate, enddate)
 
     if invoiceList == None:
@@ -155,7 +157,7 @@ def getInvoiceDetail(IC_API_KEY, SL_ENDPOINT, startdate, enddate):
             continue
 
         invoiceID = invoice['id']
-        # To align to CFTS billing convert to UTC time.
+        # To align to CFTS billing cutoffs convert to UTC time.
         invoiceDate = datetime.strptime(invoice['createDate'], "%Y-%m-%dT%H:%M:%S%z").astimezone(pytz.utc)
         invoiceTotalAmount = float(invoice['invoiceTotalAmount'])
         CFTSInvoiceDate = getCFTSInvoiceDate(invoiceDate)
@@ -175,7 +177,7 @@ def getInvoiceDetail(IC_API_KEY, SL_ENDPOINT, startdate, enddate):
         totalItems = invoice['invoiceTopLevelItemCount']
 
         # PRINT INVOICE SUMMARY LINE
-        logging.info('Invoice: {} Date: {} Type:{} Items: {} Amount: ${:,.2f}'.format(invoiceID, datetime.strftime(invoiceDate, "%Y-%m-%d"),invoiceType, totalItems, invoiceTotalRecurringAmount))
+        logging.info('Invoice: {} Date: {} Type:{} Items: {} Amount: ${:,.2f}'.format(invoiceID, datetime.strftime(invoiceDate, "%Y-%m-%d"), invoiceType, totalItems, invoiceTotalRecurringAmount))
 
         limit = 250 ## set limit of record returned
         for offset in range(0, totalItems, limit):
@@ -185,7 +187,9 @@ def getInvoiceDetail(IC_API_KEY, SL_ENDPOINT, startdate, enddate):
 
             try:
                 Billing_Invoice = client['Billing_Invoice'].getInvoiceTopLevelItems(id=invoiceID, limit=limit, offset=offset,
-                                    mask='id, billingItemId, categoryCode, category.name, hourlyFlag, hostName, domainName, product.description, createDate, totalRecurringAmount, totalOneTimeAmount, usageChargeFlag, hourlyRecurringFee, children.description, children.categoryCode, children.product, children.hourlyRecurringFee')
+                                    mask="id, billingItemId, categoryCode, category.name, hourlyFlag, hostName, domainName, product.description," \
+                                         "createDate, totalRecurringAmount, totalOneTimeAmount, usageChargeFlag, hourlyRecurringFee," \
+                                         "children.description, children.categoryCode, children.product, children.hourlyRecurringFee")
             except SoftLayer.SoftLayerAPIError as e:
                 logging.error("Billing_Invoice::getInvoiceTopLevelItems: %s, %s" % (e.faultCode, e.faultString))
                 quit()
@@ -526,7 +530,7 @@ def getAccountId(IC_API_KEY):
     ## Get Account from the passed API Key
     ##########################################################
 
-    logging.info("Retrieving IBM Cloud Account ID from ApiKey.")
+    logging.info("Retrieving IBM Cloud Account ID for this ApiKey.")
     try:
         authenticator = IAMAuthenticator(IC_API_KEY)
     except ApiException as e:
