@@ -93,35 +93,35 @@ optional arguments:
 
 ### Setting up IBM Code Engine and building container to run report
 1. Create project, build job and job.
-    1. Open the Code Engine console
-    2. Select Start creating from Start from source code.
-    3. Select Job
-    4. Enter a name for the job such as invoiceanalysis. Use a name for your job that is unique within the project.
-    5. Select a project from the list of available projects of if this is the first one, create a new one. Note that you must have a selected project to deploy an app.
-    6. Enter the URL for this GitHub repository and click specify build details. Make adjustments if needed to URL and Branch name. Click Next.
-    7. Select Dockerfile for Strategy, Dockerfile for Dockerfile, 10m for Timeout, and Medium for Build resources. Click Next.
-    8.  Select a container registry location, such as IBM Registry, Dallas.
-    9.  Select Automatic for Registry access.
-    10. Select an existing namespace or enter a name for a new one, for example, newnamespace.
-    11. Enter a name for your image and optionally a tag.
-    12. Click Done.
-    13. Click Create.
+   a. Open the Code Engine console
+   b. Select Start creating from Start from source code.
+   c. Select Job
+   d. Enter a name for the job such as invoiceanalysis. Use a name for your job that is unique within the project.
+   e. Select a project from the list of available projects of if this is the first one, create a new one. Note that you must have a selected project to deploy an app.
+   f. Enter the URL for this GitHub repository and click specify build details. Make adjustments if needed to URL and Branch name. Click Next.
+   g. Select Dockerfile for Strategy, Dockerfile for Dockerfile, 10m for Timeout, and Medium for Build resources. Click Next.
+   h. Select a container registry location, such as IBM Registry, Dallas.
+   i. Select Automatic for Registry access.
+   j. Select an existing namespace or enter a name for a new one, for example, newnamespace.
+   k. Enter a name for your image and optionally a tag.
+   l. Click Done. 
+   m. Click Create.
 2. Create configmaps and secrets.
-    1. From project list, choose newly created project.
-    2. Select secrets and configmaps
-    3. click create, choose config map, and give it a name. Add the following key value pairs
+   a. From project list, choose newly created project.
+   b. Select secrets and configmaps
+   c. click create, choose config map, and give it a name. Add the following key value pairs
         - ***COS_BUCKET*** = Bucket within COS instance to write report file to.
         - ***COS_ENDPOINT*** = Public COS Endpoint for bucket to write report file to
         - ***COS_INSTANCE_CRN*** = COS Service Instance CRN in which bucket is located.
-    4. Select secrets and configmaps (again)
-    6 click create, choose secrets, and give it a name. Add the following key value pairs
+   d. Select secrets and configmaps (again)
+   e.  click create, choose secrets, and give it a name. Add the following key value pairs
          - ***IC_API_KEY*** = an IBM Cloud API Key with Billing access to IBM Cloud Account
          - ***COS_APIKEY*** = your COS Api Key Id with writter access to appropriate bucket
 3. Choose the job previously created.
-    5. Click on the Environment variables tab.
-    6. Click add, choose reference to full configmap, and choose configmap created in previous step and click add.
-    7. Click add, choose reference to full secret, and choose secrets created in previous step and click add.
-    8. Click add, choose literal value (click add after each, and repeat)
+   a. Click on the Environment variables tab.
+   b. Click add, choose reference to full configmap, and choose configmap created in previous step and click add.
+   c. Click add, choose reference to full secret, and choose secrets created in previous step and click add.
+   d.Click add, choose literal value (click add after each, and repeat)
         -  ***startdate*** = start year & month of invoice analysis in YYYY-MM format
         -  ***enddate*** = end year & month invoice analysis in YYYY-MM format
         -  ***output*** = report filename (including extension of XLSX to be written to COS bucket)
