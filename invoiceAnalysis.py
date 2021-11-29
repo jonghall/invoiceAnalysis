@@ -37,7 +37,7 @@ optional arguments:
                         Use IBM Cloud Classic Private API Endpoint (default: False)
 """
 __author__ = 'jonhall'
-import SoftLayer, os, logging, logging.config, json, calendar, uuid, os.path, argparse, pytz
+import SoftLayer, os, logging, logging.config, json, calendar, os.path, argparse, pytz
 import pandas as pd
 import numpy as np
 from datetime import datetime, tzinfo, timezone
