@@ -1,5 +1,8 @@
-# IBM Cloud Classic Infrastructure Billing Report
+# IBM Cloud Classic Infrastructure Invoice Analysis Report
+*invoiceAnalysis.py* collects IBM Cloud Classic Infrastructure NEW, RECURRING, and CREDIT invoices and PaaS Usage between months specified in the parameters consolidates the data into an Excel worksheet for billing and usage analysis. 
+In addition to consolidation of the detailed data,  pivot tables are created in Excel tabs to assist with understanding account usage.
 
+### Required Files
 Script | Description
 ------ | -----------
 invoiceAnalysis.py | Export usage detail by invoice month to an Excel file for all IBM Cloud Classic invoices and PaaS Consumption.
@@ -7,34 +10,51 @@ requirements.txt | Package requirements
 logging.json | LOGGER config used by script
 Dockerfile | Docker Build file used by code engine to build container.
 
-*invoiceAnalysis.py* collects IBM Cloud Classic Infrastructure NEW, RECURRING, and CREDIT invoices between months specified and the data is consolidated into an
-Excel worksheet for billing and usage analysis.  In addition to detailed data pivot tables are created in Excel tabs.   _Tabs will only be created if there are related resources on the collected invoices._
+
+###Identity & Access Management Requirements
+| APIKEY | Description | Min Access Permissions
+| ------ | ----------- | ----------------------
+| IBM Cloud API Key | API Key used to pull classic and PaaS invoices and Usage Reports. | IAM Billing Viewer Role
+| COS API Key | API Key used to write output to specified bucket (if specified) | COS Bucket Write access to Bucket at specified Object Storage CRN.
+
+
+### Output Description
+One Excel worksheet is created with multiple tabs from the collected data (Classic Invoices & PaaS Usage between start and end month specified).   _Tabs are only be created if there are related resources on the collected invoices._
 
 *Excel Tab Explanation*
-   - ***Detail*** tab has every invoice item for analyzed invoices represented as one row each. For invoices with multiple items, each row represents an invoice item.  All invoice types are included, including CREDIT invoices.  The detail tab can be sorted or filtered.  
-   - ***TopSheet-YYYY-MM*** tab(s) have a mapping of each portal invoice, to the corresponding IBM CFTS invoice(s) they are billed on.
-   - ***InvoiceSummary*** tab is a pivot table of all the charges by product category & months of analyzed invoices. It also breaks out oneTime amounts vs Recurring invoices.
-   - ***CategorySummary*** tab is pivot of all recurring charges broken down by Category, sub category (for example specific VSI sizes or Bare metal server types)
-   - ***HrlyVirtualServerPivot*** tab is a pivot of just Hourly Classic VSI's
-   - ***MnthlyVirtualServerPivot*** tab is a pivot of just monthly Classic VSI's
-   - ***HrlyBareMetalServerPivot*** tab is a pivot of Hourly Bare Metal Servers
-   - ***MnthlyBareMetalServerPivot*** tab is a pivot table of monthly Bare Metal Server
-   - ***PaaS_Usage*** shows the complete list of invoice items showing the usageMonth, InvoiceMonth, ServiceName, and Plan Name with billable charges for each unit associated with the service. 
-    - ***PaaS_Summary*** shows the invoice charges for each PaaS service consumed.  Note the columns represent invoice month, not usage month unless overridden by --PAAS_USE_USAGE_MONTH 
-    - ***PaaS_Plan_Summary*** show the additional level of detail for the invoice charges for each PaaS service and plan consumed.  Note the columns represent invoice month, not usage month unless overridden by --PAAS_USE_USAGE_MONTH 
+   - ***Detail*** tab has every invoice item for all the collected invoices represented as one row each. For invoices with multiple items, each row represents one top level invoice item.  All invoice types are included, including CREDIT invoices.  The detail tab can be sorted or filtered to find specific dates, billing item id's, or specific services.  
+   - ***TopSheet-YYYY-MM*** tab(s) map each portal invoice to their corresponding IBM CFTS invoice(s) they are billed on.  These tabs can be used to facilitate reconciliation.
+   - ***InvoiceSummary*** tab is a pivot table of all the charges by product category & month by invoice type. This tab can be used to understand changes in month to month usage.
+   - ***CategorySummary*** tab is a pivot of all recurring charges broken down by Category and sub category (for example specific VSI sizes or Bare metal server types) to dig deeper into month to month usage changes.
+   - ***HrlyVirtualServerPivot*** tab is a pivot of just Hourly Classic VSI's if they exist
+   - ***MnthlyVirtualServerPivot*** tab is a pivot of just monthly Classic VSI's if they exist
+   - ***HrlyBareMetalServerPivot*** tab is a pivot of Hourly Bare Metal Servers if they exist
+   - ***MnthlyBareMetalServerPivot*** tab is a pivot table of monthly Bare Metal Server if they exist
+   - ***PaaS_Usage*** shows the complete list of PaaS Usage showing the usageMonth, InvoiceMonth, ServiceName, and Plan Name with billable charges for each unit associated with the service. 
+   - ***PaaS_Summary*** shows the invoice charges for each PaaS service consumed.  Note the columns represent CFTS invoice month, not actual usage month.
+   - ***PaaS_Plan_Summary*** show an additional level of detail for each PaaS service and plan consumed.  Note the columns represent CFTS invoice month, not actual usage month/
 
-
-Script Execution Instructions:
+## Script Execution Instructions: _See alternate instructions for Code Engine._
 
 1. Install required packages.  
 ````
 pip install -r requirements.txt
 ````
 2. Set environment variables which can be used.  IBM COS only required if file needs to be written to COS, otherwise file will be written locally.
-![env_variables.png](env_variables.png)
 
-3. Run Python script.</br>
-*Note script no longer requires IBM Cloud Classic API Keys to execute, and instead uses a single IBM Cloud API Key to access both classic invoices and IBM Cloud Usage.*
+|Parameter | Environment Variable | Default | Description
+|--------- | -------------------- | ------- | -----------
+|--IC_API_KEY, -k | IC_API_KEY | None | IBM Cloud API Key to be used to retrieve invoices and usage.
+|--STARTDATE, -s | startdate | None | Start Month in YYYY-MM format
+|--ENDDATE, -e | enddate | None | End Month in YYYY-MM format
+|--COS_APIKEY | COS_APIKEY | None | COS API to be used to write output file to object storage, if not specified file written locally.
+|--COS_BUCKET | COS_BUCKET | None | COS Bucket to be used to write output file to.
+|--COS_ENDPOINT | COS_ENDPOINT| None | COS Endpoint to be used to write output file to.
+|--OS_INSTANCE_CRN | COS_INSTANCE_CRN | None | COS Instance CRN to be used to write output file to.
+|--OUTPUT | OUTPUT | invoice-analysis.xlsx | Output file name used.
+|--SL_PRIVATE,--no_SL_PRIVATE | | --no_SL_PRIVATE | Whether to use Public or Private Endpoint.
+
+3. Run Python script (Python 3.9 required).</br>
 
 ```bazaar
 export IC_API_KEY=<ibm cloud apikey>
@@ -42,7 +62,7 @@ python invoiceAnalysis.py -s 2021-01 -e 2021-06
 ```
 
 ```bazaar
-usage: invoiceAnalysis.py [-h] [-k apikey] [-s YYYY-MM] [-e YYYY-MM] [--COS_APIKEY COS_APIKEY] [--COS_ENDPOINT COS_ENDPOINT] [--COS_INSTANCE_CRN COS_INSTANCE_CRN] [--COS_BUCKET COS_BUCKET] [--output OUTPUT] [--SL_PRIVATE | --no-SL_PRIVATE] [--PAAS_USE_USAGE_MONTH | --no-PAAS_USE_USAGE_MONTH]
+usage: invoiceAnalysis.py [-h] [-k apikey] [-s YYYY-MM] [-e YYYY-MM] [--COS_APIKEY COS_APIKEY] [--COS_ENDPOINT COS_ENDPOINT] [--COS_INSTANCE_CRN COS_INSTANCE_CRN] [--COS_BUCKET COS_BUCKET] [--output OUTPUT] [--SL_PRIVATE | --no-SL_PRIVATE]
 
 Export usage detail by invoice month to an Excel file for all IBM Cloud Classic invoices and PaaS Consumption.
 
@@ -66,11 +86,12 @@ optional arguments:
   --SL_PRIVATE, --no-SL_PRIVATE
                         Use IBM Cloud Classic Private API Endpoint (default: False)
 
+
 ```
 
-# IBM Cloud Classic Infrastructure Billing Report as a Code Engine Job
+## Running IBM Cloud Classic Infrastructure Invoice Analysis Report as a Code Engine Job
 
-## Setting up IBM Code Engine and building container to run report
+### Setting up IBM Code Engine and building container to run report
 1. Create project, build job and job.
     1. Open the Code Engine console
     2. Select Start creating from Start from source code.
