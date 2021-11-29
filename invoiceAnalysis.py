@@ -338,7 +338,7 @@ def createReport(filename, classicUsage, paasUsage):
     classicUsage.to_excel(writer, 'Detail')
     usdollar = workbook.add_format({'num_format': '$#,##0.00'})
     worksheet = writer.sheets['Detail']
-    worksheet.set_column('Q:V', 18, usdollar)
+    worksheet.set_column('Q:W', 18, usdollar)
     totalrows,totalcols=classicUsage.shape
     worksheet.autofilter(0,0,totalrows,totalcols)
 
