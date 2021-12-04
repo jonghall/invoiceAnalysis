@@ -54,7 +54,7 @@ pip install -r requirements.txt
 |--OS_INSTANCE_CRN | COS_INSTANCE_CRN | None | COS Instance CRN to be used to write output file to.
 |--sendGridApi | sendGridApi | None | SendGrid API key to use to send Email.
 |--sendGridTo | sendGridTo | None | SendGrid comma delimited list of email addresses to send output report to.
-|--sendGridFrom | sendGridFrom | None | SendGrid from email addresss to send output report form.
+|--sendGridFrom | sendGridFrom | None | SendGrid from email addresss to send output report from.
 |--sendGridSubject | sendGridSubject | None | SendGrid subject for email send with output report.
 |--OUTPUT | OUTPUT | invoice-analysis.xlsx | Output file name used.
 |--SL_PRIVATE,--no_SL_PRIVATE | | --no_SL_PRIVATE | Whether to use Public or Private Endpoint.
