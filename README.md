@@ -47,10 +47,15 @@ pip install -r requirements.txt
 |--IC_API_KEY, -k | IC_API_KEY | None | IBM Cloud API Key to be used to retrieve invoices and usage.
 |--STARTDATE, -s | startdate | None | Start Month in YYYY-MM format
 |--ENDDATE, -e | enddate | None | End Month in YYYY-MM format
+|--months, -m | months | None | Number of months including last full month to include in report. (use instead of -s/-e)
 |--COS_APIKEY | COS_APIKEY | None | COS API to be used to write output file to object storage, if not specified file written locally.
 |--COS_BUCKET | COS_BUCKET | None | COS Bucket to be used to write output file to.
 |--COS_ENDPOINT | COS_ENDPOINT| None | COS Endpoint to be used to write output file to.
 |--OS_INSTANCE_CRN | COS_INSTANCE_CRN | None | COS Instance CRN to be used to write output file to.
+|--sendGridApi | sendGridApi | None | SendGrid API key to use to send Email.
+|--sendGridTo | sendGridTo | None | SendGrid comma delimited list of email addresses to send output report to.
+|--sendGridFrom | sendGridFrom | None | SendGrid from email addresss to send output report form.
+|--sendGridSubject | sendGridSubject | None | SendGrid subject for email send with output report.
 |--OUTPUT | OUTPUT | invoice-analysis.xlsx | Output file name used.
 |--SL_PRIVATE,--no_SL_PRIVATE | | --no_SL_PRIVATE | Whether to use Public or Private Endpoint.
 
@@ -62,7 +67,8 @@ python invoiceAnalysis.py -s 2021-01 -e 2021-06
 ```
 
 ```bazaar
-usage: invoiceAnalysis.py [-h] [-k apikey] [-s YYYY-MM] [-e YYYY-MM] [--COS_APIKEY COS_APIKEY] [--COS_ENDPOINT COS_ENDPOINT] [--COS_INSTANCE_CRN COS_INSTANCE_CRN] [--COS_BUCKET COS_BUCKET] [--output OUTPUT] [--SL_PRIVATE | --no-SL_PRIVATE]
+usage: invoiceAnalysis.py [-h] [-k apikey] [-s YYYY-MM] [-e YYYY-MM] [-m MONTHS] [--COS_APIKEY COS_APIKEY] [--COS_ENDPOINT COS_ENDPOINT] [--COS_INSTANCE_CRN COS_INSTANCE_CRN] [--COS_BUCKET COS_BUCKET] [--sendGridApi SENDGRIDAPI]      ─╯
+                          [--sendGridTo SENDGRIDTO] [--sendGridFrom SENDGRIDFROM] [--sendGridSubject SENDGRIDSUBJECT] [--output OUTPUT] [--SL_PRIVATE | --no-SL_PRIVATE]
 
 Export usage detail by invoice month to an Excel file for all IBM Cloud Classic invoices and PaaS Consumption.
 
@@ -74,6 +80,9 @@ optional arguments:
                         Start Year & Month in format YYYY-MM
   -e YYYY-MM, --enddate YYYY-MM
                         End Year & Month in format YYYY-MM
+  -m MONTHS, --months MONTHS
+                        Number of months including last full month to include in report.
+
   --COS_APIKEY COS_APIKEY
                         COS apikey to use for Object Storage.
   --COS_ENDPOINT COS_ENDPOINT
@@ -82,6 +91,14 @@ optional arguments:
                         COS Instance CRN to use for file upload.
   --COS_BUCKET COS_BUCKET
                         COS Bucket name to use for file upload.
+  --sendGridApi SENDGRIDAPI
+                        SendGrid ApiKey used to email output.
+  --sendGridTo SENDGRIDTO
+                        SendGrid comma deliminated list of emails to send output to.
+  --sendGridFrom SENDGRIDFROM
+                        Sendgrid from email to send output from.
+  --sendGridSubject SENDGRIDSUBJECT
+                        SendGrid email subject for output email
   --output OUTPUT       Filename Excel output file. (including extension of .xlsx)
   --SL_PRIVATE, --no-SL_PRIVATE
                         Use IBM Cloud Classic Private API Endpoint (default: False)

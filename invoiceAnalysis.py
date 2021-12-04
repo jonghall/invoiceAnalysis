@@ -37,9 +37,13 @@ optional arguments:
                         Use IBM Cloud Classic Private API Endpoint (default: False)
 """
 __author__ = 'jonhall'
-import SoftLayer, os, logging, logging.config, json, calendar, os.path, argparse, pytz
+import SoftLayer, os, logging, logging.config, json, calendar, os.path, argparse, pytz, base64
 import pandas as pd
 import numpy as np
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import (
+    Mail, Personalization, Email, Attachment, FileContent, FileName,
+    FileType, Disposition, ContentId)
 from datetime import datetime, tzinfo, timezone
 from dateutil import tz
 from calendar import monthrange
@@ -554,6 +558,44 @@ def getAccountId(IC_API_KEY):
 
     return api_key["account_id"]
 
+def sendEmail(startdate, enddate, sendGridTo, sendGridFrom, sendGridSubject, sendGridApi, outputname):
+    # Send output to email distributionlist via SendGrid
+
+    html = ("<p><b>invoiceAnalysis Output Attached for {} to {} </b></br></p>".format(datetime.strftime(startdate, "%m/%d/%Y"), datetime.strftime(enddate, "%m/%d/%Y")))
+
+    to_list = Personalization()
+    for email in sendGridTo.split(","):
+        to_list.add_to(Email(email))
+
+    message = Mail(
+        from_email=sendGridFrom,
+        subject=sendGridSubject,
+        html_content=html
+    )
+
+    message.add_personalization(to_list)
+
+    # create attachment from file
+    file_path = os.path.join("./", outputname)
+    with open(file_path, 'rb') as f:
+        data = f.read()
+        f.close()
+    encoded = base64.b64encode(data).decode()
+    attachment = Attachment()
+    attachment.file_content = FileContent(encoded)
+    attachment.file_type = FileType('application/xlsx')
+    attachment.file_name = FileName(outputname)
+    attachment.disposition = Disposition('attachment')
+    attachment.content_id = ContentId('invoiceAnalysis')
+    message.attachment = attachment
+    try:
+        sg = SendGridAPIClient(sendGridApi)
+        response = sg.send(message)
+        logging.info("Email Send succesfull to {}, status code = {}.".format(sendGridTo,response.status_code))
+    except Exception as e:
+        logging.error("Email Send Error, status code = %s." % e.to_dict)
+    return
+
 def accountUsage(IC_API_KEY, IC_ACCOUNT_ID, startdate, enddate):
     ##########################################################
     ## Get Usage for Account matching recuring invoice periods
@@ -622,21 +664,45 @@ def accountUsage(IC_API_KEY, IC_ACCOUNT_ID, startdate, enddate):
 if __name__ == "__main__":
     setup_logging()
     parser = argparse.ArgumentParser(
-        description="Export usage detail by invoice month to an Excel file for all IBM Cloud Classic invoices and PaaS Consumption.")
+        description="Export usage detail by invoice month to an Excel file for all IBM Cloud Classic invoices and corresponding lsPaaS Consumption.")
     parser.add_argument("-k", "--IC_API_KEY", default=os.environ.get('IC_API_KEY', None), metavar="apikey", help="IBM Cloud API Key")
     parser.add_argument("-s", "--startdate", default=os.environ.get('startdate', None), metavar="YYYY-MM", help="Start Year & Month in format YYYY-MM")
     parser.add_argument("-e", "--enddate", default=os.environ.get('enddate', None), metavar="YYYY-MM", help="End Year & Month in format YYYY-MM")
+    parser.add_argument("-m", "--months", default=os.environ.get('months', None), help="Number of months including last full month to include in report.")
     parser.add_argument("--COS_APIKEY", default=os.environ.get('COS_APIKEY', None), help="COS apikey to use for Object Storage.")
     parser.add_argument("--COS_ENDPOINT", default=os.environ.get('COS_ENDPOINT', None), help="COS endpoint to use for Object Storage.")
     parser.add_argument("--COS_INSTANCE_CRN", default=os.environ.get('COS_INSTANCE_CRN', None), help="COS Instance CRN to use for file upload.")
     parser.add_argument("--COS_BUCKET", default=os.environ.get('COS_BUCKET', None), help="COS Bucket name to use for file upload.")
+    parser.add_argument("--sendGridApi", default=os.environ.get('sendGridApi', None), help="SendGrid ApiKey used to email output.")
+    parser.add_argument("--sendGridTo", default=os.environ.get('sendGridTo', None), help="SendGrid comma deliminated list of emails to send output to.")
+    parser.add_argument("--sendGridFrom", default=os.environ.get('sendGridFrom', None), help="Sendgrid from email to send output from.")
+    parser.add_argument("--sendGridSubject", default=os.environ.get('sendGridSubject', None), help="SendGrid email subject for output email")
     parser.add_argument("--output", default=os.environ.get('output', 'invoice-analysis.xlsx'), help="Filename Excel output file. (including extension of .xlsx)")
     parser.add_argument("--SL_PRIVATE", default=False, action=argparse.BooleanOptionalAction, help="Use IBM Cloud Classic Private API Endpoint")
+
     args = parser.parse_args()
 
-    if args.startdate == None or args.enddate == None:
-        logging.error("You must provide a start and end month in the format of YYYY-MM.")
-        quit()
+    if args.months != None:
+        months = int(args.months)
+        dallas=tz.gettz('US/Central')
+        today=datetime.today().astimezone(dallas)
+        if today.day > 19:
+            enddate=today.strftime('%Y-%m')
+            startdate = today - relativedelta(months=months-1)
+            startdate = startdate.strftime("%Y-%m")
+        else:
+            enddate = today - relativedelta(months=1)
+            enddate=enddate.strftime('%Y-%m')
+            startdate = today - relativedelta(months=(months))
+            startdate = startdate.strftime("%Y-%m")
+    else:
+        if args.startdate == None or args.enddate == None:
+            logging.error("You must provide either a number of months (-m) or a start (-s) and end month (-e) in the format of YYYY-MM.")
+            quit()
+        else:
+            startdate = args.startdate
+            enddate = args.startdate
+
     if args.IC_API_KEY == None:
         logging.error("You must provide an IBM Cloud ApiKey with billing View authority to run script.")
         quit()
@@ -644,7 +710,7 @@ if __name__ == "__main__":
     IC_API_KEY = args.IC_API_KEY
 
     # Calculate invoice dates based on SLIC invoice cutoffs.
-    startdate, enddate = getInvoiceDates(args.startdate, args.enddate)
+    startdate, enddate = getInvoiceDates(startdate, enddate)
 
     # Change endpoint to private Endpoint if command line open chosen
     if args.SL_PRIVATE:
@@ -663,6 +729,9 @@ if __name__ == "__main__":
     # Build Exel Report
     createReport(args.output, classicUsage, paasUsage)
 
+    if args.sendGridApi != None:
+        sendEmail(startdate, enddate, args.sendGridTo, args.sendGridFrom, args.sendGridSubject, args.sendGridApi, args.output)
+
     # upload created file to COS if COS credentials provided
     if args.COS_APIKEY != None:
         cos = ibm_boto3.resource("s3",
@@ -672,6 +741,8 @@ if __name__ == "__main__":
                                  endpoint_url=args.COS_ENDPOINT
                                  )
         multi_part_upload(args.COS_BUCKET, args.output, "./" + args.output)
-        #cleanup file
+
+    if args.sendGridApi != None or args.COS_APIKEY != None:
+        #cleanup file if written to COS or sendvia email
         logging.info("Deleting {} local file.".format(args.output))
         os.remove("./"+args.output)
