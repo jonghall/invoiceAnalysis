@@ -55,7 +55,7 @@ pip install -r requirements.txt
 |--sendGridApi | sendGridApi | None | SendGrid API key to use to send Email.
 |--sendGridTo | sendGridTo | None | SendGrid comma delimited list of email addresses to send output report to.
 |--sendGridFrom | sendGridFrom | None | SendGrid from email addresss to send output report from.
-|--sendGridSubject | sendGridSubject | None | SendGrid subject for email send with output report.
+|--sendGridSubject | sendGridSubject | None | SendGrid email subject.
 |--OUTPUT | OUTPUT | invoice-analysis.xlsx | Output file name used.
 |--SL_PRIVATE,--no_SL_PRIVATE | | --no_SL_PRIVATE | Whether to use Public or Private Endpoint.
 
