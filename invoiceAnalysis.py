@@ -395,26 +395,25 @@ def createReport(filename, classicUsage, paasUsage):
     invoicemonth = months[-1]
     newstart = invoicemonth + "-01"
     newend = invoicemonth + "-19"
-    logging.info("Creating Forecast based on {} recurring and NEW invoices from {} to {}.".format(invoicemonth, newstart, newend))
     forecastR = classicUsage.query('IBM_Invoice_Month == @invoicemonth and Type == "RECURRING"')[['Portal_Invoice_Date', 'IBM_Invoice_Month','Type','Category','totalAmount']]
     forecastN = classicUsage.query('IBM_Invoice_Month == @invoicemonth and Type == "NEW" and Portal_Invoice_Date >= @newstart and Portal_Invoice_Date <= @newend ')[['Portal_Invoice_Date', 'IBM_Invoice_Month','Type','Category','NewEstimatedMonthly']]
     result = forecastR.append(forecastN).fillna(0)
     sum_column = result["totalAmount"] + result["NewEstimatedMonthly"]
     result["nextRecurring"] = sum_column
-    logging.info("Creating forecast worksheet.")
-    newForecast = pd.pivot_table(result, index=["Category"],
-                                        values=["totalAmount", "NewEstimatedMonthly", "nextRecurring"],
-                                        aggfunc={'totalAmount': np.sum, 'NewEstimatedMonthly': np.sum, 'nextRecurring': np.sum }, margins=True, margins_name='Total', fill_value=0). \
-                                        rename(columns={'totalAmount': 'lastRecurringInvoice', 'NewEstimatedMonthly': 'NewEstimatedCharges'})
+    if len(result) > 0:
+        newForecast = pd.pivot_table(result, index=["Category"],
+                                            values=["totalAmount", "NewEstimatedMonthly", "nextRecurring"],
+                                            aggfunc={'totalAmount': np.sum, 'NewEstimatedMonthly': np.sum, 'nextRecurring': np.sum }, margins=True, margins_name='Total', fill_value=0). \
+                                            rename(columns={'totalAmount': 'lastRecurringInvoice', 'NewEstimatedMonthly': 'NewEstimatedCharges'})
 
-    column_order = ['lastRecurringInvoice', 'NewEstimatedCharges', 'nextRecurring']
-    newForecast = newForecast.reindex(column_order, axis=1)
-    newForecast.to_excel(writer, 'recurringForecast')
-    worksheet = writer.sheets['recurringForecast']
-    format1 = workbook.add_format({'num_format': '$#,##0.00'})
-    format2 = workbook.add_format({'align': 'left'})
-    worksheet.set_column("A:A", 40, format2)
-    worksheet.set_column("B:D", 25, format1)
+        column_order = ['lastRecurringInvoice', 'NewEstimatedCharges', 'nextRecurring']
+        newForecast = newForecast.reindex(column_order, axis=1)
+        newForecast.to_excel(writer, 'recurringForecast')
+        worksheet = writer.sheets['recurringForecast']
+        format1 = workbook.add_format({'num_format': '$#,##0.00'})
+        format2 = workbook.add_format({'align': 'left'})
+        worksheet.set_column("A:A", 40, format2)
+        worksheet.set_column("B:D", 25, format1)
 
     #
     # Build a pivot table by Invoice Type
@@ -788,3 +787,4 @@ if __name__ == "__main__":
         #cleanup file if written to COS or sendvia email
         logging.info("Deleting {} local file.".format(args.output))
         os.remove("./"+args.output)
+    logging.info("invoiceAnalysis complete.")
