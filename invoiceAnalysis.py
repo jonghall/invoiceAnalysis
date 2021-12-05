@@ -13,8 +13,10 @@
 # limitations under the License.
 #
 """
-usage: invoiceAnalysis.py [-h] [-k apikey] [-s YYYY-MM] [-e YYYY-MM] [--COS_APIKEY COS_APIKEY] [--COS_ENDPOINT COS_ENDPOINT] [--COS_INSTANCE_CRN COS_INSTANCE_CRN] [--COS_BUCKET COS_BUCKET] [--output OUTPUT] [--SL_PRIVATE | --no-SL_PRIVATE]
-Export usage detail by invoice month to an Excel file for all IBM Cloud Classic invoices and PaaS Consumption.
+usage: invoiceAnalysis.py [-h] [-k apikey] [-s YYYY-MM] [-e YYYY-MM] [-m MONTHS] [--COS_APIKEY COS_APIKEY] [--COS_ENDPOINT COS_ENDPOINT] [--COS_INSTANCE_CRN COS_INSTANCE_CRN] [--COS_BUCKET COS_BUCKET] [--sendGridApi SENDGRIDAPI]      ─╯
+                          [--sendGridTo SENDGRIDTO] [--sendGridFrom SENDGRIDFROM] [--sendGridSubject SENDGRIDSUBJECT] [--output OUTPUT] [--SL_PRIVATE | --no-SL_PRIVATE]
+
+Export usage detail by invoice month to an Excel file for all IBM Cloud Classic invoices and corresponding lsPaaS Consumption.
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -24,6 +26,8 @@ optional arguments:
                         Start Year & Month in format YYYY-MM
   -e YYYY-MM, --enddate YYYY-MM
                         End Year & Month in format YYYY-MM
+  -m MONTHS, --months MONTHS
+                        Number of months including last full month to include in report.
   --COS_APIKEY COS_APIKEY
                         COS apikey to use for Object Storage.
   --COS_ENDPOINT COS_ENDPOINT
@@ -32,9 +36,19 @@ optional arguments:
                         COS Instance CRN to use for file upload.
   --COS_BUCKET COS_BUCKET
                         COS Bucket name to use for file upload.
+  --sendGridApi SENDGRIDAPI
+                        SendGrid ApiKey used to email output.
+  --sendGridTo SENDGRIDTO
+                        SendGrid comma deliminated list of emails to send output to.
+  --sendGridFrom SENDGRIDFROM
+                        Sendgrid from email to send output from.
+  --sendGridSubject SENDGRIDSUBJECT
+                        SendGrid email subject for output email
   --output OUTPUT       Filename Excel output file. (including extension of .xlsx)
   --SL_PRIVATE, --no-SL_PRIVATE
                         Use IBM Cloud Classic Private API Endpoint (default: False)
+╭
+
 """
 __author__ = 'jonhall'
 import SoftLayer, os, logging, logging.config, json, calendar, os.path, argparse, pytz, base64
@@ -375,6 +389,34 @@ def createReport(filename, classicUsage, paasUsage):
         worksheet.set_column("F:F", 18, format1)
 
     #
+    # Build a pivot table by for Forecasting NEW invoices form 1st to 20th and add to last Recurring Invoice to estimate
+    # what the next recurringInvoice will be.   Uses estimated monthly charges from all NEW invoices which occurred after
+    # the recurring invoice.   This forecast assumes, no deprovisioning and NEW additional invoices after 19th.
+    invoicemonth = months[-1]
+    newstart = invoicemonth + "-01"
+    newend = invoicemonth + "-19"
+    logging.info("Creating Forecast based on {} recurring and NEW invoices from {} to {}.".format(invoicemonth, newstart, newend))
+    forecastR = classicUsage.query('IBM_Invoice_Month == @invoicemonth and Type == "RECURRING"')[['Portal_Invoice_Date', 'IBM_Invoice_Month','Type','Category','totalAmount']]
+    forecastN = classicUsage.query('IBM_Invoice_Month == @invoicemonth and Type == "NEW" and Portal_Invoice_Date >= @newstart and Portal_Invoice_Date <= @newend ')[['Portal_Invoice_Date', 'IBM_Invoice_Month','Type','Category','NewEstimatedMonthly']]
+    result = forecastR.append(forecastN).fillna(0)
+    sum_column = result["totalAmount"] + result["NewEstimatedMonthly"]
+    result["nextRecurring"] = sum_column
+    logging.info("Creating forecast worksheet.")
+    newForecast = pd.pivot_table(result, index=["Category"],
+                                        values=["totalAmount", "NewEstimatedMonthly", "nextRecurring"],
+                                        aggfunc={'totalAmount': np.sum, 'NewEstimatedMonthly': np.sum, 'nextRecurring': np.sum }, margins=True, margins_name='Total', fill_value=0). \
+                                        rename(columns={'totalAmount': 'lastRecurringInvoice', 'NewEstimatedMonthly': 'NewEstimatedCharges'})
+
+    column_order = ['lastRecurringInvoice', 'NewEstimatedCharges', 'nextRecurring']
+    newForecast = newForecast.reindex(column_order, axis=1)
+    newForecast.to_excel(writer, 'recurringForecast')
+    worksheet = writer.sheets['recurringForecast']
+    format1 = workbook.add_format({'num_format': '$#,##0.00'})
+    format2 = workbook.add_format({'align': 'left'})
+    worksheet.set_column("A:A", 40, format2)
+    worksheet.set_column("B:D", 25, format1)
+
+    #
     # Build a pivot table by Invoice Type
     #
     if len(classicUsage)>0:
@@ -701,7 +743,7 @@ if __name__ == "__main__":
             quit()
         else:
             startdate = args.startdate
-            enddate = args.startdate
+            enddate = args.enddate
 
     if args.IC_API_KEY == None:
         logging.error("You must provide an IBM Cloud ApiKey with billing View authority to run script.")

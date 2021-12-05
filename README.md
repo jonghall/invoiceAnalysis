@@ -24,6 +24,7 @@ One Excel worksheet is created with multiple tabs from the collected data (Class
 *Excel Tab Explanation*
    - ***Detail*** tab has every invoice item for all the collected invoices represented as one row each. For invoices with multiple items, each row represents one top level invoice item.  All invoice types are included, including CREDIT invoices.  The detail tab can be sorted or filtered to find specific dates, billing item id's, or specific services.  
    - ***TopSheet-YYYY-MM*** tab(s) map each portal invoice to their corresponding IBM CFTS invoice(s) they are billed on.  These tabs can be used to facilitate reconciliation.
+   - ***recurringForecast*** tab estimates next recurring invoice based on estimated charges from NEW invoices not included on last recurring Invoice.
    - ***InvoiceSummary*** tab is a pivot table of all the charges by product category & month by invoice type. This tab can be used to understand changes in month to month usage.
    - ***CategorySummary*** tab is a pivot of all recurring charges broken down by Category and sub category (for example specific VSI sizes or Bare metal server types) to dig deeper into month to month usage changes.
    - ***HrlyVirtualServerPivot*** tab is a pivot of just Hourly Classic VSI's if they exist
